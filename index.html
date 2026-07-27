@@ -203,8 +203,12 @@
     var r = await sb.auth.signInWithPassword({ email: email, password: pass });
     loginBtn.textContent = "Inloggen"; loginBtn.disabled = false;
     if(r.error){ toonFout("Inloggen mislukt: " + r.error.message); return; }
-    // signInWithPassword geeft de user direct terug; die is gegarandeerd actueel.
+    // Zowel user als de volledige sessie bewaren; de sessie bevat het token
+    // dat Supabase nodig heeft om auth.uid() te vullen bij het schrijven.
     user = r.data.user;
+    if(r.data.session){
+      try { await sb.auth.setSession(r.data.session); } catch(e){ /* al gezet */ }
+    }
     if(!user){ toonFout("Sessie niet geladen — probeer opnieuw."); return; }
     await naBinnenkomst();
   }
@@ -242,17 +246,19 @@
   }
 
   async function nieuweAdmin(naam){
-    // Verse gebruiker rechtstreeks bij de server ophalen — niet vertrouwen op
-    // de bewaarde 'user'-variabele, want die kan verouderd of leeg zijn.
-    var u = await sb.auth.getUser();
-    var uid = (u.data && u.data.user) ? u.data.user.id : null;
+    // Probeer de verse gebruiker; val terug op de bij login bewaarde user.
+    var uid = null;
+    try {
+      var u = await sb.auth.getUser();
+      if(u.data && u.data.user){ uid = u.data.user.id; user = u.data.user; }
+    } catch(e){ /* negeren, terugval hieronder */ }
+    if(!uid && user){ uid = user.id; }
     if(!uid){
       alert("Je sessie is verlopen. Log opnieuw in.");
       loginEl.style.display = "flex";
       root.style.display = "none";
       return false;
     }
-    user = u.data.user;   // bijwerken voor de rest van de app
     var r = await sb.from('adm_administraties')
       .insert({ user_id:uid, naam:naam })
       .select().single();
