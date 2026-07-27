@@ -203,9 +203,8 @@
     var r = await sb.auth.signInWithPassword({ email: email, password: pass });
     loginBtn.textContent = "Inloggen"; loginBtn.disabled = false;
     if(r.error){ toonFout("Inloggen mislukt: " + r.error.message); return; }
-    // Sessie ophalen zodat user gegarandeerd bevestigd is voor de eerste db-actie
-    var sess = await sb.auth.getSession();
-    user = (sess.data && sess.data.session) ? sess.data.session.user : r.data.user;
+    // signInWithPassword geeft de user direct terug; die is gegarandeerd actueel.
+    user = r.data.user;
     if(!user){ toonFout("Sessie niet geladen — probeer opnieuw."); return; }
     await naBinnenkomst();
   }
@@ -243,9 +242,19 @@
   }
 
   async function nieuweAdmin(naam){
-    if(!user){ alert("Niet ingelogd — log opnieuw in."); return false; }
+    // Verse gebruiker rechtstreeks bij de server ophalen — niet vertrouwen op
+    // de bewaarde 'user'-variabele, want die kan verouderd of leeg zijn.
+    var u = await sb.auth.getUser();
+    var uid = (u.data && u.data.user) ? u.data.user.id : null;
+    if(!uid){
+      alert("Je sessie is verlopen. Log opnieuw in.");
+      loginEl.style.display = "flex";
+      root.style.display = "none";
+      return false;
+    }
+    user = u.data.user;   // bijwerken voor de rest van de app
     var r = await sb.from('adm_administraties')
-      .insert({ user_id:user.id, naam:naam })
+      .insert({ user_id:uid, naam:naam })
       .select().single();
     if(r.error){ alert("Aanmaken mislukt: "+r.error.message); return false; }
     admins[r.data.id] = { naam:naam, ini:initialen(naam), sub:"nieuwe administratie" };
