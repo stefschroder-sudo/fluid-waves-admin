@@ -172,7 +172,15 @@
   // ── Supabase ─────────────────────────────────────────────────────────────
   var SUPABASE_URL = "https://vsvqybcfhvlrbnhmuerh.supabase.co";
   var SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzdnF5YmNmaHZscmJuaG11ZXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMzIxOTQsImV4cCI6MjA5ODgwODE5NH0.7I7hktMKe6rF3ZDgM7LMKyO_Pkww6fcBULdO-8BsudY";
-  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: {
+      persistSession: true,          // sessie in localStorage bewaren
+      autoRefreshToken: true,        // token automatisch verversen
+      detectSessionInUrl: true,
+      storage: window.localStorage,
+      storageKey: 'fw-admin-auth'    // eigen sleutel, los van andere apps op dit project
+    }
+  });
 
   // ── State ────────────────────────────────────────────────────────────────
   var admins = {};          // { id: {naam, ini, sub} }
@@ -195,7 +203,10 @@
     var r = await sb.auth.signInWithPassword({ email: email, password: pass });
     loginBtn.textContent = "Inloggen"; loginBtn.disabled = false;
     if(r.error){ toonFout("Inloggen mislukt: " + r.error.message); return; }
-    user = r.data.user;
+    // Sessie ophalen zodat user gegarandeerd bevestigd is voor de eerste db-actie
+    var sess = await sb.auth.getSession();
+    user = (sess.data && sess.data.session) ? sess.data.session.user : r.data.user;
+    if(!user){ toonFout("Sessie niet geladen — probeer opnieuw."); return; }
     await naBinnenkomst();
   }
   loginBtn.onclick = login;
@@ -216,27 +227,30 @@
   async function laadAdmins(){
     admins = {};
     var r = await sb.from('adm_administraties').select('*').order('aangemaakt');
-    if(r.error){ console.error(r.error); return; }
+    if(r.error){
+      alert("Kon administraties niet laden: " + r.error.message);
+      return;
+    }
     r.data.forEach(function(a){
       admins[a.id] = { naam:a.naam, ini:initialen(a.naam), sub:(a.kvk ? "KvK "+a.kvk : "administratie") };
     });
     var ids = Object.keys(admins);
-    if(!ids.length){
-      // Eerste keer: maak meteen een administratie aan
-      var naam = prompt("Welkom. Naam van je eerste administratie:", "Schröder Consult") || "Mijn administratie";
-      await nieuweAdmin(naam);
-    } else if(!curAdmin || !admins[curAdmin]){
-      curAdmin = ids[0];
+    if(ids.length){
+      if(!curAdmin || !admins[curAdmin]) curAdmin = ids[0];
+    } else {
+      curAdmin = null;   // nog geen administratie → renderScherm toont een aanmaakknop
     }
   }
 
   async function nieuweAdmin(naam){
+    if(!user){ alert("Niet ingelogd — log opnieuw in."); return false; }
     var r = await sb.from('adm_administraties')
       .insert({ user_id:user.id, naam:naam })
       .select().single();
-    if(r.error){ alert("Aanmaken mislukt: "+r.error.message); return; }
+    if(r.error){ alert("Aanmaken mislukt: "+r.error.message); return false; }
     admins[r.data.id] = { naam:naam, ini:initialen(naam), sub:"nieuwe administratie" };
     curAdmin = r.data.id;
+    return true;
   }
 
   // ── Menustructuur: per bovenmenu-item een titel, subtitel en linkeropties ─
@@ -401,6 +415,7 @@
 
   // Boekingen van de actieve administratie + soort laden
   async function laadBoekingen(soort){
+    if(!curAdmin) return [];   // geen administratie geselecteerd → niets te laden
     var r = await sb.from('adm_boekingen')
       .select('*')
       .eq('administratie_id', curAdmin)
@@ -645,6 +660,27 @@
     titelEl.textContent = it.label;
     subEl.textContent = (admins[curAdmin] ? admins[curAdmin].naam : '') + " · boekjaar 2026 · " + v.titel;
     actieEl.style.display = "none";   // actieknop zit nu in het scherm zelf
+
+    // Nog geen administratie? Toon een nette aanmaakknop i.p.v. de database in te gaan.
+    if(!curAdmin){
+      schermEl.innerHTML =
+        '<div class="fw-leeg">'+
+          ic('building', 'style="font-size:30px; color:var(--rand);"')+
+          '<div style="font-size:13px; color:var(--inkt); font-weight:600; margin:6px 0 3px;">Nog geen administratie</div>'+
+          '<div style="font-size:12px; margin-bottom:14px;">Maak je eerste administratie aan om te beginnen.</div>'+
+          '<button id="fw-eerste" style="padding:9px 16px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Administratie aanmaken</button>'+
+        '</div>';
+      var b = document.getElementById('fw-eerste');
+      if(b) b.onclick = async function(){
+        var naam = prompt("Naam van je administratie:", "Schröder Consult");
+        if(!naam) return;
+        b.textContent = "Bezig…"; b.disabled = true;
+        var ok = await nieuweAdmin(naam);
+        if(ok){ applyAdmin(); await renderScherm(); }
+        else { b.textContent = "Administratie aanmaken"; b.disabled = false; }
+      };
+      return;
+    }
 
     if(curView === "invoeren" && curItem === "omzet"){
       schermEl.innerHTML = '<div class="fw-leeg"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 6V3M12 21v-3M6 12H3M21 12h-3M7.8 7.8L5.6 5.6M18.4 18.4l-2.2-2.2M7.8 16.2l-2.2 2.2M18.4 5.6l-2.2 2.2"/></svg>Laden…</div>';
