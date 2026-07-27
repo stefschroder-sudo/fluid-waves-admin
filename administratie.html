@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fluid Waves — Administratie</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --navy:#1B2C4F; --navy-licht:#2D4A7F; --goud:#C9A227; --goud-licht:#E0BE4A;
+    --papier:#F4F1EA; --papier-diep:#E7E2D6; --wit:#FBF8F0;
+    --rand:#E0D8C4; --rand-licht:#E8E1D2; --inkt:#2A2A28; --grijs:#8A7F63;
+    --groen:#0F6E56; --rood:#B4341E;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--papier-diep);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--inkt);
+  }
+  .fw-shell { max-width: 1080px; margin: 0 auto; background: var(--papier); border-radius: 14px; overflow: hidden; border: 1px solid #D8D2C4; box-shadow: 0 6px 24px rgba(27,44,79,0.10); }
+  .fw-lbl { transition: opacity .12s; }
+  button { font-family: inherit; }
+  #fw-org-list > div:hover { background: var(--papier) !important; }
+  .fw-item { cursor: pointer; }
+  .fw-item:hover { background: var(--papier-diep); }
+  .fw-item.actief { background: var(--papier-diep); box-shadow: inset 3px 0 0 var(--goud); }
+  .fw-top { cursor: pointer; user-select: none; font-weight: 600; }
+  .fw-top.actief { color: var(--navy) !important; border-bottom-color: var(--goud) !important; }
+  .fw-note { max-width: 1080px; margin: 12px auto 0; font-size: 12px; color: #7A756A; text-align: center; }
+  .fw-leeg { padding: 40px 20px; text-align: center; color: var(--grijs); }
+  .fw-leeg i { font-size: 30px; color: var(--rand); display: block; margin-bottom: 8px; }
+  .ic { width: 1em; height: 1em; vertical-align: -0.15em; display: inline-block; }
+  .fw-leeg .ic { width: 30px; height: 30px; color: var(--rand); margin: 0 auto 8px; display: block; }
+</style>
+</head>
+<body>
+
+<!-- ── Inlogscherm ──────────────────────────────────────────────────────────── -->
+<div id="fw-login" style="position:fixed; inset:0; background:var(--papier-diep); display:flex; align-items:center; justify-content:center; z-index:1000;">
+  <div style="width:340px; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 6px 24px rgba(27,44,79,0.12); padding:26px 24px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+      <svg width="38" height="38" viewBox="0 0 40 40" aria-hidden="true">
+        <rect width="40" height="40" rx="9" fill="#1B2C4F"/>
+        <path d="M6 24 Q12 18 20 24 T34 24" fill="none" stroke="#C9A227" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M6 29 Q12 23 20 29 T34 29" fill="none" stroke="#C9A227" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
+        <path d="M6 19 Q12 13 20 19 T34 19" fill="none" stroke="#C9A227" stroke-width="2.2" stroke-linecap="round" opacity="0.3"/>
+      </svg>
+      <div>
+        <div style="font-size:15px; font-weight:700; color:var(--navy);">Administratie</div>
+        <div style="font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--goud); font-weight:700;">Fluid Waves</div>
+      </div>
+    </div>
+    <label style="display:block; font-size:11px; color:var(--grijs); margin-bottom:3px;">E-mailadres</label>
+    <input id="fw-email" type="email" autocomplete="username" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; margin-bottom:11px; background:var(--wit);">
+    <label style="display:block; font-size:11px; color:var(--grijs); margin-bottom:3px;">Wachtwoord</label>
+    <input id="fw-pass" type="password" autocomplete="current-password" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; margin-bottom:14px; background:var(--wit);">
+    <button id="fw-login-btn" style="width:100%; padding:10px; background:var(--navy); color:var(--papier); border:1px solid var(--navy); border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">Inloggen</button>
+    <div id="fw-login-fout" style="display:none; margin-top:11px; font-size:11.5px; color:var(--rood); text-align:center;"></div>
+    <div style="margin-top:14px; font-size:10.5px; color:var(--grijs); text-align:center;">Zelfde inloggegevens als Job Radar</div>
+  </div>
+</div>
+
+
+<div id="fw-root" class="fw-shell" style="display:none;">
+
+  <!-- ── Bovenbalk ─────────────────────────────────────────────────────────── -->
+  <div style="display:flex; align-items:center; justify-content:space-between; background:var(--navy); padding:12px 20px; border-bottom:2px solid var(--goud);">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-label="Fluid Waves" role="img">
+        <rect width="40" height="40" rx="9" fill="#FBF8F0"/>
+        <path d="M6 24 Q12 18 20 24 T34 24" fill="none" stroke="#1B2C4F" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M6 29 Q12 23 20 29 T34 29" fill="none" stroke="#1B2C4F" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
+        <path d="M6 19 Q12 13 20 19 T34 19" fill="none" stroke="#C9A227" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div style="font-size:15px; font-weight:700; color:#FFFFFF; letter-spacing:.01em;">Administratie</div>
+        <div style="font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--goud); font-weight:700;">Fluid Waves</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div style="display:flex; align-items:center; gap:6px; color:#C7CEDA; font-size:12px;">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>
+        <span>Boekjaar <b id="fw-jaar" style="color:#FFFFFF;">2026</b></span>
+      </div>
+      <div id="fw-periode" style="display:flex; align-items:center; gap:0; border:1px solid rgba(255,255,255,.28); border-radius:8px; overflow:hidden;">
+        <button class="fw-per" data-per="maand" style="border:none; background:transparent; color:#C7CEDA; font-size:11.5px; padding:6px 11px; cursor:pointer;">Maand</button>
+        <button class="fw-per" data-per="kwartaal" style="border:none; border-left:1px solid rgba(255,255,255,.28); background:var(--goud); color:var(--navy); font-size:11.5px; padding:6px 11px; cursor:pointer; font-weight:600;">Kwartaal</button>
+        <button class="fw-per" data-per="jaar" style="border:none; border-left:1px solid rgba(255,255,255,.28); background:transparent; color:#C7CEDA; font-size:11.5px; padding:6px 11px; cursor:pointer;">Jaar</button>
+      </div>
+      <select id="fw-periode-keuze" style="border:1px solid rgba(255,255,255,.28); border-radius:8px; background:var(--navy); font-size:11.5px; padding:6px 8px; color:#FFFFFF;"></select>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div style="width:30px; height:30px; border-radius:50%; background:var(--goud); color:var(--navy); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">SS</div>
+        <span style="font-size:12.5px; color:#FFFFFF;">Stef Schröder</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Bovenmenu ─────────────────────────────────────────────────────────── -->
+  <div id="fw-topmenu" style="display:flex; gap:2px; background:var(--papier); padding:0 20px; border-bottom:1px solid var(--rand); flex-wrap:wrap;">
+    <div class="fw-top actief" data-view="invoeren" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16zM13.5 6.5l4 4M16 19h6M19 16v6"/></svg>Invoeren</div>
+    <div class="fw-top" data-view="dashboard" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 4h7v9H4zM4 16h7v4H4zM13 4h7v4h-7zM13 11h7v9h-7z"/></svg>Dashboard</div>
+    <div class="fw-top" data-view="btw" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M5 21V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16l-3-2-2 2-2-2-2 2-2-2z"/><path d="M9 9l6 6M9 9.5v-.5M15 15v-.5"/></svg>BTW-aangifte</div>
+    <div class="fw-top" data-view="ib" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>IB-aangifte</div>
+    <div class="fw-top" data-view="resultaat" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 19h16M4 15l4-6 4 3 4-8"/></svg>Resultaat</div>
+  </div>
+
+  <div style="display:flex;">
+    <!-- ── Linkermenu (beweegt mee met het bovenmenu) ──────────────────────── -->
+    <div id="fw-sidebar" style="width:210px; flex-shrink:0; background:var(--papier); border-right:1px solid var(--rand); display:flex; flex-direction:column; min-height:560px;">
+
+      <div id="fw-sel-wrap" style="padding:12px 12px 10px; border-bottom:1px solid var(--rand);">
+        <div class="fw-lbl" style="font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--grijs); margin-bottom:6px;">Administratie</div>
+        <button id="fw-sel-btn" aria-expanded="false" style="width:100%; display:flex; align-items:center; gap:8px; background:var(--wit); border:1px solid var(--rand-licht); border-radius:8px; padding:8px 10px; cursor:pointer; text-align:left;">
+          <span id="fw-sel-ini" style="width:26px; height:26px; flex-shrink:0; border-radius:6px; background:var(--navy); color:var(--papier); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600;">SC</span>
+          <span class="fw-lbl" style="flex:1; min-width:0; line-height:1.2;">
+            <span id="fw-sel-org" style="display:block; font-size:12.5px; font-weight:600; color:var(--navy); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Schröder Consult</span>
+            <span id="fw-sel-sub" style="display:block; font-size:10px; color:var(--grijs);">KvK 87125897</span>
+          </span>
+          <svg id="fw-sel-chev" class="ic fw-lbl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px; color:var(--grijs); transition:transform .15s;"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div id="fw-sel-panel" style="display:none; margin-top:6px; background:var(--wit); border:1px solid var(--rand-licht); border-radius:8px; overflow:hidden;">
+          <div id="fw-org-list"></div>
+          <div id="fw-nieuw" style="padding:8px 10px; font-size:11.5px; color:var(--navy); cursor:pointer; display:flex; align-items:center; gap:6px; border-top:1px solid var(--rand-licht);"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 5v14M5 12h14"/></svg>Nieuwe administratie</div>
+        </div>
+      </div>
+
+      <!-- Onderdelen worden hier per bovenmenu-keuze ingevuld -->
+      <div id="fw-nav" style="padding:12px 8px; flex:1;"></div>
+
+      <button id="fw-collapse" aria-label="Menu inklappen" style="display:flex; align-items:center; gap:10px; padding:11px 16px; background:transparent; border:none; border-top:1px solid var(--rand); cursor:pointer; font-size:12px; color:var(--grijs); width:100%;">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:17px;"><path d="M15 6l-6 6 6 6"/></svg><span class="fw-lbl">Inklappen</span>
+      </button>
+    </div>
+
+    <!-- ── Hoofdinhoud ──────────────────────────────────────────────────────── -->
+    <div style="flex:1; padding:18px 22px; min-width:0;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+        <div>
+          <div id="fw-titel" style="font-size:18px; font-weight:700; color:var(--navy);">Invoeren</div>
+          <div id="fw-subtitel" style="font-size:11.5px; color:var(--grijs);">Schröder Consult · boekjaar 2026</div>
+        </div>
+        <div id="fw-actie" style="display:flex; align-items:center; gap:8px; background:var(--navy); color:var(--papier); padding:8px 13px; border-radius:8px; font-size:12px; cursor:pointer;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 5v14M5 12h14"/></svg>Nieuwe regel</div>
+      </div>
+
+      <div style="border-bottom:2px solid var(--goud); margin:8px 0 16px;"></div>
+
+      <!-- Wisselend scherm -->
+      <div id="fw-scherm"></div>
+
+      <div style="display:flex; align-items:center; gap:6px; margin-top:18px; padding-top:10px; border-top:1px solid var(--rand); font-size:10.5px; color:var(--grijs);">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:13px;"><path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4"/></svg>U bent zelf verantwoordelijk voor de juiste invoer · deel alle resultaten met uw accountant of fiscalist
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="fw-note">Fluid Waves administratie · lege opzet · index-versie om vanaf te bouwen</div>
+
+<script>
+(function(){
+  var root = document.getElementById('fw-root');
+
+  function ic(naam, extra){
+    var p = ICONS[naam] || "";
+    return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" '+(extra||'')+'>'+p+'</svg>';
+  }
+  var ICONS = {"calendar": "<path d=\"M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z\"/><path d=\"M16 3v4M8 3v4M4 11h16\"/>", "chart-line": "<path d=\"M4 19h16M4 15l4-6 4 3 4-8\"/>", "check": "<path d=\"M5 12l5 5L20 7\"/>", "chevron-down": "<path d=\"M6 9l6 6 6-6\"/>", "chevron-left": "<path d=\"M15 6l-6 6 6 6\"/>", "chevron-right": "<path d=\"M9 6l6 6-6 6\"/>", "file-description": "<path d=\"M14 3v4a1 1 0 0 0 1 1h4\"/><path d=\"M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z\"/><path d=\"M9 9h1M9 13h6M9 17h6\"/>", "layout-dashboard": "<path d=\"M4 4h7v9H4zM4 16h7v4H4zM13 4h7v4h-7zM13 11h7v9h-7z\"/>", "loader": "<path d=\"M12 6V3M12 21v-3M6 12H3M21 12h-3M7.8 7.8L5.6 5.6M18.4 18.4l-2.2-2.2M7.8 16.2l-2.2 2.2M18.4 5.6l-2.2 2.2\"/>", "lock": "<path d=\"M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4\"/>", "paperclip": "<path d=\"M15 7l-6.5 6.5a2.5 2.5 0 0 0 3.5 3.5L18 11a5 5 0 0 0-7-7l-6 6a7.5 7.5 0 0 0 10.5 10.5\"/>", "pencil-plus": "<path d=\"M4 20h4l10-10a2 2 0 0 0-4-4L4 16zM13.5 6.5l4 4M16 19h6M19 16v6\"/>", "plus": "<path d=\"M12 5v14M5 12h14\"/>", "receipt-tax": "<path d=\"M5 21V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16l-3-2-2 2-2-2-2 2-2-2z\"/><path d=\"M9 9l6 6M9 9.5v-.5M15 15v-.5\"/>", "trash": "<path d=\"M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3\"/>", "trending-up": "<path d=\"M3 17l6-6 4 4 8-8M17 7h4v4\"/>", "upload": "<path d=\"M12 15V3M8 7l4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2\"/>", "file-invoice": "<path d=\"M14 3v4a1 1 0 0 0 1 1h4\"/><path d=\"M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z\"/><path d=\"M9 7h1M9 11h6M9 15h4\"/>", "cash": "<path d=\"M3 7h18v10H3zM12 12a2 2 0 1 0 0 .01M6 10v4M18 10v4\"/>", "users": "<path d=\"M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20v-1a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v1M16 11a3 3 0 1 0 0-6M17 15a4 4 0 0 1 4 4v1\"/>", "history": "<path d=\"M12 8v4l3 3M3.05 11a9 9 0 1 1 .5 4M3 4v5h5\"/>", "alert-triangle": "<path d=\"M12 9v4M12 17v.01M10.3 4.3L2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z\"/>", "adjustments": "<path d=\"M6 4v6M6 14v6M12 4v10M12 18v2M18 4v2M18 10v10M3 10h6M9 14h6M15 6h6\"/>", "files": "<path d=\"M8 4h7l4 4v10a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z\"/><path d=\"M4 8v11a1 1 0 0 0 1 1h9\"/>", "download": "<path d=\"M12 3v12M8 11l4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2\"/>", "businessplan": "<path d=\"M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM3 7h18v10H3zM7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2\"/>", "scale": "<path d=\"M12 3v18M7 21h10M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0zM3 7h18\"/>", "discount": "<path d=\"M9 15l6-6M9.5 9.5v.01M14.5 14.5v.01M5 5h14v14H5z\"/>", "report-money": "<path d=\"M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2M9 4a2 2 0 0 1 4 0M12 11a1.5 1.5 0 0 0 0 3 1.5 1.5 0 0 1 0 3M12 10v1M12 16v1\"/>", "calendar-stats": "<path d=\"M11.8 20H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6M16 3v4M8 3v4M4 11h16M18 15v3M21 18v-1\"/>", "calendar-month": "<path d=\"M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM16 3v4M8 3v4M4 11h16M8 15h2v2H8z\"/>", "user-cog": "<path d=\"M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20v-1a4 4 0 0 1 4-4h3M18 16.5v.01M18 20v.01M15.4 18l.01.01M20.6 18l.01.01M18 18m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0\"/>", "info-circle": "<path d=\"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v.01M11 12h1v4h1\"/>", "inbox": "<path d=\"M4 4h16v16H4zM4 13h4l1 2h6l1-2h4\"/>", "backup": "<path d=\"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v4l3 2\"/>", "building": "<path d=\"M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 8h4a1 1 0 0 1 1 1v12M8 8h.01M8 12h.01M8 16h.01M12 8h.01M12 12h.01M12 16h.01\"/>"};
+
+
+  // ── Supabase ─────────────────────────────────────────────────────────────
+  var SUPABASE_URL = "https://vsvqybcfhvlrbnhmuerh.supabase.co";
+  var SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzdnF5YmNmaHZscmJuaG11ZXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMzIxOTQsImV4cCI6MjA5ODgwODE5NH0.7I7hktMKe6rF3ZDgM7LMKyO_Pkww6fcBULdO-8BsudY";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  // ── State ────────────────────────────────────────────────────────────────
+  var admins = {};          // { id: {naam, ini, sub} }
+  var curAdmin = null;      // administratie-id
+  var boekingen = [];       // boekingen van de actieve administratie
+  var user = null;
+
+  // ── Login ────────────────────────────────────────────────────────────────
+  var loginEl = document.getElementById('fw-login');
+  var loginBtn = document.getElementById('fw-login-btn');
+  var loginFout = document.getElementById('fw-login-fout');
+
+  function toonFout(t){ loginFout.textContent = t; loginFout.style.display = "block"; }
+
+  async function login(){
+    var email = document.getElementById('fw-email').value.trim();
+    var pass = document.getElementById('fw-pass').value;
+    if(!email || !pass){ toonFout("Vul e-mail en wachtwoord in."); return; }
+    loginBtn.textContent = "Bezig…"; loginBtn.disabled = true;
+    var r = await sb.auth.signInWithPassword({ email: email, password: pass });
+    loginBtn.textContent = "Inloggen"; loginBtn.disabled = false;
+    if(r.error){ toonFout("Inloggen mislukt: " + r.error.message); return; }
+    user = r.data.user;
+    await naBinnenkomst();
+  }
+  loginBtn.onclick = login;
+  document.getElementById('fw-pass').addEventListener('keydown', function(e){ if(e.key==="Enter") login(); });
+
+  async function naBinnenkomst(){
+    loginEl.style.display = "none";
+    root.style.display = "";
+    await laadAdmins();
+    applyAdmin(); renderNav(); await renderScherm();
+  }
+
+  // ── Administraties uit de database ───────────────────────────────────────
+  function initialen(naam){
+    return naam.trim().split(/\s+/).map(function(w){return w[0];}).join("").slice(0,2).toUpperCase();
+  }
+
+  async function laadAdmins(){
+    admins = {};
+    var r = await sb.from('adm_administraties').select('*').order('aangemaakt');
+    if(r.error){ console.error(r.error); return; }
+    r.data.forEach(function(a){
+      admins[a.id] = { naam:a.naam, ini:initialen(a.naam), sub:(a.kvk ? "KvK "+a.kvk : "administratie") };
+    });
+    var ids = Object.keys(admins);
+    if(!ids.length){
+      // Eerste keer: maak meteen een administratie aan
+      var naam = prompt("Welkom. Naam van je eerste administratie:", "Schröder Consult") || "Mijn administratie";
+      await nieuweAdmin(naam);
+    } else if(!curAdmin || !admins[curAdmin]){
+      curAdmin = ids[0];
+    }
+  }
+
+  async function nieuweAdmin(naam){
+    var r = await sb.from('adm_administraties')
+      .insert({ user_id:user.id, naam:naam })
+      .select().single();
+    if(r.error){ alert("Aanmaken mislukt: "+r.error.message); return; }
+    admins[r.data.id] = { naam:naam, ini:initialen(naam), sub:"nieuwe administratie" };
+    curAdmin = r.data.id;
+  }
+
+  // ── Menustructuur: per bovenmenu-item een titel, subtitel en linkeropties ─
+  var views = {
+    invoeren: {
+      titel:"Invoeren", actie:"Nieuwe regel",
+      items:[
+        {id:"omzet",  icon:"trending-up",  label:"Omzet",          groep:"Inkomsten"},
+        {id:"inkoop", icon:"file-invoice", label:"Inkoopfacturen", groep:"Uitgaven"},
+        {id:"kosten", icon:"cash",         label:"Kosten",         groep:"Uitgaven"},
+        {id:"loon",   icon:"users",        label:"Loonstroken",    groep:"Personeel"}
+      ]
+    },
+    dashboard: {
+      titel:"Dashboard", actie:null,
+      items:[
+        {id:"overzicht",  icon:"layout-dashboard", label:"Overzicht",      groep:"Bekijken"},
+        {id:"recent",     icon:"history",          label:"Recent",         groep:"Bekijken"},
+        {id:"aandacht",   icon:"alert-triangle",   label:"Aandachtspunten",groep:"Bekijken"}
+      ]
+    },
+    btw: {
+      titel:"BTW-aangifte", actie:"Aangifte opstellen",
+      items:[
+        {id:"opstellen", icon:"file-text",     label:"Aangifte opstellen", groep:"Aangifte"},
+        {id:"suppletie", icon:"adjustments",   label:"Suppletie",          groep:"Aangifte"},
+        {id:"herkomst",  icon:"files",         label:"Herkomst per bestand",groep:"Controle"},
+        {id:"btw-export",icon:"download",      label:"Export",             groep:"Uitvoer"}
+      ]
+    },
+    ib: {
+      titel:"IB-aangifte", actie:null,
+      items:[
+        {id:"winst",   icon:"businessplan", label:"Winst uit onderneming", groep:"Aangifte"},
+        {id:"balans",  icon:"scale",        label:"Balans",                groep:"Aangifte"},
+        {id:"aftrek",  icon:"discount",     label:"Aftrekposten",          groep:"Aangifte"},
+        {id:"ib-export",icon:"download",    label:"Export",                groep:"Uitvoer"}
+      ]
+    },
+    resultaat: {
+      titel:"Resultaat", actie:null,
+      items:[
+        {id:"wenv",     icon:"report-money", label:"Winst- en verlies", groep:"Overzicht"},
+        {id:"kwartaal", icon:"calendar-stats",label:"Per kwartaal",     groep:"Overzicht"},
+        {id:"maand",    icon:"calendar-month",label:"Per maand",        groep:"Overzicht"}
+      ]
+    }
+  };
+
+  var curView = "invoeren";
+  var curItem = "omzet";
+  var BOEKJAAR = 2026;
+  var bewerkId = null;   // id van de regel die nu bewerkt wordt, of null bij nieuw
+
+  // ── Periodekeuze (bovenbalk, geldt overal) ───────────────────────────────
+  var MAANDEN = ["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
+  var KWARTALEN = ["Q1 · jan-mrt","Q2 · apr-jun","Q3 · jul-sep","Q4 · okt-dec"];
+  var periode = { type:"kwartaal", maand:(new Date().getMonth()+1), kwartaal:(Math.floor(new Date().getMonth()/3)+1) };
+
+  function periodeLabel(){
+    if(periode.type==="maand") return MAANDEN[periode.maand-1]+" "+BOEKJAAR;
+    if(periode.type==="kwartaal") return KWARTALEN[periode.kwartaal-1]+" · "+BOEKJAAR;
+    return "Heel "+BOEKJAAR;
+  }
+  function inPeriode(datumStr){
+    if(!datumStr) return periode.type==="jaar";
+    var d = new Date(datumStr);
+    if(d.getFullYear() !== BOEKJAAR) return false;
+    if(periode.type==="maand") return (d.getMonth()+1) === periode.maand;
+    if(periode.type==="kwartaal") return (Math.floor(d.getMonth()/3)+1) === periode.kwartaal;
+    return true;
+  }
+  function vulPeriodeKeuze(){
+    var sel = document.getElementById('fw-periode-keuze');
+    if(periode.type==="jaar"){ sel.style.display="none"; return; }
+    sel.style.display="";
+    sel.innerHTML="";
+    var lijst = periode.type==="maand" ? MAANDEN : KWARTALEN;
+    var actief = periode.type==="maand" ? periode.maand : periode.kwartaal;
+    lijst.forEach(function(label, i){
+      var o=document.createElement('option'); o.value=i+1; o.textContent=label;
+      if(i+1===actief) o.selected=true; sel.appendChild(o);
+    });
+  }
+
+  // ── Administratiekiezer ──────────────────────────────────────────────────
+  var btn = document.getElementById('fw-sel-btn');
+  var panel = document.getElementById('fw-sel-panel');
+  var chev = document.getElementById('fw-sel-chev');
+  var orgList = document.getElementById('fw-org-list');
+
+  function renderAdmins(){
+    orgList.innerHTML = "";
+    Object.keys(admins).forEach(function(id){
+      var a = admins[id];
+      var actief = (id === curAdmin);
+      var d = document.createElement('div');
+      d.style.cssText = "padding:8px 10px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:8px; color:"+(actief?"var(--navy)":"var(--inkt)")+"; background:"+(actief?"var(--papier)":"transparent")+";";
+      d.innerHTML =
+        '<span style="width:22px; height:22px; flex-shrink:0; border-radius:5px; background:var(--navy); color:var(--papier); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:600;">'+a.ini+'</span>'+
+        '<span style="flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'+a.naam+'</span>'+
+        (actief ? '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:14px; color:var(--groen);"><path d="M5 12l5 5L20 7"/></svg>' : '');
+      d.onclick = async function(e){ e.stopPropagation(); curAdmin = id; applyAdmin(); closePanel(); await renderScherm(); };
+      orgList.appendChild(d);
+    });
+  }
+  function applyAdmin(){
+    var a = admins[curAdmin];
+    if(!a) return;
+    document.getElementById('fw-sel-org').textContent = a.naam;
+    document.getElementById('fw-sel-sub').textContent = a.sub;
+    document.getElementById('fw-sel-ini').textContent = a.ini;
+  }
+  function openPanel(){ panel.style.display="block"; chev.style.transform="rotate(180deg)"; btn.setAttribute('aria-expanded','true'); renderAdmins(); }
+  function closePanel(){ panel.style.display="none"; chev.style.transform="rotate(0deg)"; btn.setAttribute('aria-expanded','false'); }
+  btn.onclick = function(e){ e.stopPropagation(); panel.style.display==="block" ? closePanel() : openPanel(); };
+  document.addEventListener('click', function(){ if(panel.style.display==="block") closePanel(); });
+
+  document.getElementById('fw-nieuw').onclick = async function(e){
+    e.stopPropagation();
+    var naam = prompt("Naam van de nieuwe administratie:");
+    if(naam){ await nieuweAdmin(naam); applyAdmin(); renderAdmins(); await renderScherm(); }
+  };
+
+  // ── Linkermenu opbouwen voor de actieve view ─────────────────────────────
+  var navEl = document.getElementById('fw-nav');
+  function renderNav(){
+    var v = views[curView];
+    navEl.innerHTML = "";
+    var vorigeGroep = null;
+    v.items.forEach(function(it){
+      if(it.groep !== vorigeGroep){
+        var g = document.createElement('div');
+        g.className = "fw-lbl";
+        g.style.cssText = "font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--grijs); padding:0 8px; margin:"+(vorigeGroep?"14px":"0")+" 0 6px;";
+        g.textContent = it.groep;
+        navEl.appendChild(g);
+        vorigeGroep = it.groep;
+      }
+      var d = document.createElement('div');
+      d.className = "fw-item" + (it.id===curItem ? " actief" : "");
+      d.setAttribute('data-nav', it.id);
+      d.style.cssText = "display:flex; align-items:center; gap:10px; padding:9px 16px; border-radius:8px; font-size:12.5px; color:var(--inkt);";
+      d.title = it.label;
+      d.innerHTML = ic(it.icon, 'style="font-size:17px; color:var(--navy);"')+'<span class="fw-lbl">'+it.label+'</span>';
+      d.onclick = function(){ curItem = it.id; bewerkId = null; renderNav(); renderScherm(); };
+      navEl.appendChild(d);
+    });
+  }
+
+  // ── Rechterscherm ────────────────────────────────────────────────────────
+  var titelEl = document.getElementById('fw-titel');
+  var subEl = document.getElementById('fw-subtitel');
+  var actieEl = document.getElementById('fw-actie');
+  var schermEl = document.getElementById('fw-scherm');
+
+  function huidigItem(){
+    return views[curView].items.filter(function(x){ return x.id===curItem; })[0] || views[curView].items[0];
+  }
+
+  function eur(n){ return "€ " + (Number(n)||0).toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+  // Boekingen van de actieve administratie + soort laden
+  async function laadBoekingen(soort){
+    var r = await sb.from('adm_boekingen')
+      .select('*')
+      .eq('administratie_id', curAdmin)
+      .eq('soort', soort)
+      .order('datum', { ascending:false });
+    if(r.error){ console.error(r.error); return []; }
+    return r.data;
+  }
+
+  async function bewaarBoeking(rec){
+    rec.user_id = user.id;
+    rec.administratie_id = curAdmin;
+    var r = await sb.from('adm_boekingen').insert(rec).select().single();
+    if(r.error){ alert("Opslaan mislukt: "+r.error.message); return null; }
+    return r.data;
+  }
+
+  async function wijzigBoeking(id, rec){
+    var r = await sb.from('adm_boekingen').update(rec).eq('id', id).select().single();
+    if(r.error){ alert("Bijwerken mislukt: "+r.error.message); return null; }
+    return r.data;
+  }
+
+  async function verwijderBoeking(id){
+    var r = await sb.from('adm_boekingen').delete().eq('id', id);
+    if(r.error){ alert("Verwijderen mislukt: "+r.error.message); }
+  }
+
+  // ── Bestanden (Supabase Storage) ─────────────────────────────────────────
+  // Pad = <user_id>/<administratie_id>/<tijd>_<bestandsnaam>. De user_id vooraan
+  // is wat de storage-policy controleert, zodat niemand bij andermans bestanden komt.
+  async function uploadBestand(file){
+    var veilig = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    var pad = user.id + "/" + curAdmin + "/" + Date.now() + "_" + veilig;
+    var r = await sb.storage.from('adm-bestanden').upload(pad, file);
+    if(r.error){ alert("Upload mislukt: " + r.error.message); return false; }
+    return pad;
+  }
+  async function openBestand(pad){
+    var r = await sb.storage.from('adm-bestanden').createSignedUrl(pad, 60);
+    if(r.error){ alert("Openen mislukt: " + r.error.message); return; }
+    window.open(r.data.signedUrl, "_blank");
+  }
+
+  // Omzet-scherm: formulier + lijst
+  async function schermOmzet(){
+    var alle = await laadBoekingen('omzet');
+    var rows = alle.filter(function(r){ return inPeriode(r.datum); });
+    var totaal = rows.reduce(function(s,r){ return s + (Number(r.bedrag_excl)||0); }, 0);
+
+    var bewerken = !!bewerkId;
+    var huidige = bewerken ? alle.filter(function(x){return x.id===bewerkId;})[0] : null;
+
+    var html =
+      '<div style="background:var(--wit); border:1px solid '+(bewerken?'var(--goud)':'var(--rand-licht)')+'; border-radius:10px; padding:14px 16px; margin-bottom:16px;">'+
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">'+
+          '<div style="font-size:12px; font-weight:600; color:var(--navy);">'+(bewerken?'Omzetregel bewerken':'Nieuwe omzetregel')+'</div>'+
+          (bewerken?'<button id="o-annuleer" style="background:none; border:none; color:var(--grijs); font-size:11.5px; cursor:pointer;">Annuleren</button>':'')+
+        '</div>'+
+        '<div style="display:grid; grid-template-columns:1.1fr 1.6fr 1fr 0.8fr auto; gap:8px; align-items:end;">'+
+          veld("Datum", '<input id="o-datum" type="date" '+inputStijl()+'>')+
+          veld("Klant", '<input id="o-klant" type="text" placeholder="Naam klant" '+inputStijl()+'>')+
+          veld("Bedrag excl.", '<input id="o-excl" type="number" step="0.01" placeholder="0,00" '+inputStijl()+'>')+
+          veld("Btw %", '<select id="o-btw" '+inputStijl()+'><option value="21">21%</option><option value="9">9%</option><option value="0">0%</option></select>')+
+          '<button id="o-opslaan" style="padding:9px 14px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">'+(bewerken?'Bijwerken':'Opslaan')+'</button>'+
+        '</div>'+
+        '<input id="o-oms" type="text" placeholder="Omschrijving (optioneel)" style="width:100%; margin-top:8px; padding:8px 10px; border:1px solid var(--rand); border-radius:8px; font-size:12.5px; background:#fff;">'+
+        // Upload-zone
+        '<div id="o-drop" style="margin-top:10px; border:1.5px dashed var(--rand); border-radius:8px; padding:12px; text-align:center; cursor:pointer; background:#fff;">'+
+          '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:18px; color:var(--goud);"><path d="M12 15V3M8 7l4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'+
+          '<span id="o-drop-tekst" style="font-size:11.5px; color:var(--grijs); margin-left:6px;">'+(huidige && huidige.bestand_pad ? 'Bewijsstuk aanwezig — kies een nieuw bestand om te vervangen' : 'Sleep een factuur hierheen of klik om te kiezen (pdf, jpg, png)')+'</span>'+
+          '<input id="o-file" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">'+
+        '</div>'+
+      '</div>';
+
+    if(rows.length){
+      html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">'+
+                '<div style="font-size:12px; font-weight:600; color:var(--navy);">Omzet · '+rows.length+' regel'+(rows.length!==1?'s':'')+' · '+periodeLabel()+'</div>'+
+                '<div style="font-size:13px; font-weight:700; color:var(--navy);">'+eur(totaal)+' excl. btw</div>'+
+              '</div>';
+      html += '<div style="border:1px solid var(--rand-licht); border-radius:10px; overflow:hidden;">';
+      rows.forEach(function(r, i){
+        var actief = (r.id === bewerkId);
+        html +=
+          '<div data-edit="'+r.id+'" style="display:flex; align-items:center; gap:10px; padding:9px 12px; font-size:12.5px; cursor:pointer; '+(actief?'background:#FBF6E6;':'')+(i?'border-top:1px solid var(--rand-licht);':'')+'">'+
+            '<span style="width:82px; flex-shrink:0; color:var(--grijs);">'+(r.datum||'—')+'</span>'+
+            '<span style="flex:1; min-width:0; font-weight:600; color:var(--inkt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+(r.naam||'—')+(r.omschrijving?' <span style="font-weight:400; color:var(--grijs);">· '+r.omschrijving+'</span>':'')+'</span>'+
+            '<span style="width:100px; flex-shrink:0; text-align:right;">'+eur(r.bedrag_excl)+'</span>'+
+            '<span style="width:64px; flex-shrink:0; text-align:right; color:var(--grijs);">'+r.btw_pct+'% btw</span>'+
+            '<span style="width:22px; flex-shrink:0; text-align:center;">'+(r.bestand_pad ? '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--goud); font-size:15px;" data-title="Bewijsstuk openen" data-bestand="'+r.bestand_pad+'"><path d="M15 7l-6.5 6.5a2.5 2.5 0 0 0 3.5 3.5L18 11a5 5 0 0 0-7-7l-6 6a7.5 7.5 0 0 0 10.5 10.5"/></svg>' : '')+'</span>'+
+            '<button data-del="'+r.id+'" title="Verwijderen" style="width:22px; flex-shrink:0; background:none; border:none; color:var(--rood); cursor:pointer; font-size:15px; padding:0;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/></svg></button>'+
+          '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="fw-leeg"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M3 17l6-6 4 4 8-8M17 7h4v4"/></svg>'+
+              '<div style="font-size:12px;">Geen omzet in '+periodeLabel()+'. Voeg hierboven een regel toe of kies een andere periode.</div></div>';
+    }
+
+    schermEl.innerHTML = html;
+
+    // Velden vullen: bij bewerken de bestaande waarden, anders datum = vandaag
+    if(bewerken && huidige){
+      document.getElementById('o-datum').value = huidige.datum || "";
+      document.getElementById('o-klant').value = huidige.naam || "";
+      document.getElementById('o-excl').value = huidige.bedrag_excl || "";
+      document.getElementById('o-btw').value = String(huidige.btw_pct || 21);
+      document.getElementById('o-oms').value = huidige.omschrijving || "";
+    } else {
+      document.getElementById('o-datum').value = new Date().toISOString().slice(0,10);
+    }
+
+    // Upload-zone gedrag
+    var drop = document.getElementById('o-drop');
+    var fileInput = document.getElementById('o-file');
+    var gekozenBestand = null;
+    drop.onclick = function(){ fileInput.click(); };
+    drop.ondragover = function(e){ e.preventDefault(); drop.style.borderColor="var(--goud)"; };
+    drop.ondragleave = function(){ drop.style.borderColor="var(--rand)"; };
+    drop.ondrop = function(e){ e.preventDefault(); drop.style.borderColor="var(--rand)"; if(e.dataTransfer.files[0]){ gekozenBestand=e.dataTransfer.files[0]; toonBestandsnaam(); } };
+    fileInput.onchange = function(){ if(fileInput.files[0]){ gekozenBestand=fileInput.files[0]; toonBestandsnaam(); } };
+    function toonBestandsnaam(){ document.getElementById('o-drop-tekst').textContent = gekozenBestand.name; }
+
+    // Annuleren van bewerkmodus
+    var annBtn = document.getElementById('o-annuleer');
+    if(annBtn){ annBtn.onclick = async function(){ bewerkId = null; await renderScherm(); }; }
+
+    document.getElementById('o-opslaan').onclick = async function(){
+      var excl = parseFloat(document.getElementById('o-excl').value) || 0;
+      var pct = parseInt(document.getElementById('o-btw').value, 10);
+      if(!excl){ alert("Vul een bedrag in."); return; }
+      var btw = Math.round(excl * pct) / 100;
+      this.textContent = "Bezig…"; this.disabled = true;
+
+      var pad = huidige ? huidige.bestand_pad : null;   // bestaand bewijsstuk behouden
+      if(gekozenBestand){
+        var nieuwPad = await uploadBestand(gekozenBestand);
+        if(nieuwPad === false){ this.textContent = bewerken?"Bijwerken":"Opslaan"; this.disabled=false; return; }
+        pad = nieuwPad;
+      }
+
+      var rec = {
+        soort:'omzet',
+        datum: document.getElementById('o-datum').value || null,
+        naam: document.getElementById('o-klant').value.trim(),
+        omschrijving: document.getElementById('o-oms').value.trim(),
+        bedrag_excl: excl, btw_bedrag: btw,
+        bedrag_incl: Math.round((excl+btw)*100)/100,
+        btw_pct: pct,
+        bron: gekozenBestand ? gekozenBestand.name : (huidige ? huidige.bron : 'handmatig'),
+        bestand_pad: pad
+      };
+
+      var ok;
+      if(bewerken){ ok = await wijzigBoeking(bewerkId, rec); bewerkId = null; }
+      else { ok = await bewaarBoeking(rec); }
+      if(ok) await renderScherm();
+    };
+
+    // Klik op een regel → bewerken (maar niet als je op paperclip of prullenbak klikt)
+    Array.prototype.forEach.call(schermEl.querySelectorAll('[data-edit]'), function(rij){
+      rij.onclick = async function(e){
+        if(e.target.closest('[data-del]') || e.target.closest('[data-bestand]')) return;
+        bewerkId = rij.getAttribute('data-edit');
+        await renderScherm();
+        schermEl.scrollIntoView({behavior:"smooth", block:"start"});
+      };
+    });
+
+    Array.prototype.forEach.call(schermEl.querySelectorAll('[data-del]'), function(b){
+      b.onclick = async function(e){
+        e.stopPropagation();
+        if(!confirm("Deze omzetregel verwijderen?")) return;
+        await verwijderBoeking(b.getAttribute('data-del'));
+        if(bewerkId === b.getAttribute('data-del')) bewerkId = null;
+        await renderScherm();
+      };
+    });
+    Array.prototype.forEach.call(schermEl.querySelectorAll('[data-bestand]'), function(el){
+      el.onclick = async function(e){ e.stopPropagation(); await openBestand(el.getAttribute('data-bestand')); };
+    });
+  }
+
+  function veld(label, input){
+    return '<div><label style="display:block; font-size:10px; color:var(--grijs); margin-bottom:3px;">'+label+'</label>'+input+'</div>';
+  }
+  function inputStijl(){
+    return 'style="padding:8px 10px; border:1px solid var(--rand); border-radius:8px; font-size:12.5px; background:#fff; width:100%;"';
+  }
+
+  async function renderScherm(){
+    var v = views[curView];
+    var it = huidigItem();
+    titelEl.textContent = it.label;
+    subEl.textContent = (admins[curAdmin] ? admins[curAdmin].naam : '') + " · boekjaar 2026 · " + v.titel;
+    actieEl.style.display = "none";   // actieknop zit nu in het scherm zelf
+
+    if(curView === "invoeren" && curItem === "omzet"){
+      schermEl.innerHTML = '<div class="fw-leeg"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 6V3M12 21v-3M6 12H3M21 12h-3M7.8 7.8L5.6 5.6M18.4 18.4l-2.2-2.2M7.8 16.2l-2.2 2.2M18.4 5.6l-2.2 2.2"/></svg>Laden…</div>';
+      await schermOmzet();
+      return;
+    }
+
+    // Overige schermen: nog leeg
+    schermEl.innerHTML =
+      '<div class="fw-leeg">'+
+        ic(it.icon, 'style="font-size:30px; color:var(--rand);"')+
+        '<div style="font-size:13px; color:var(--inkt); font-weight:600; margin-bottom:3px;">'+it.label+'</div>'+
+        '<div style="font-size:12px;">Dit scherm is nog leeg. Omzet werkt al — de rest bouwen we in dezelfde stijl.</div>'+
+      '</div>';
+  }
+
+  // ── Bovenmenu ────────────────────────────────────────────────────────────
+  Array.prototype.forEach.call(document.querySelectorAll('.fw-top'), function(t){
+    t.onclick = async function(){
+      document.querySelectorAll('.fw-top').forEach(function(x){ x.classList.remove('actief'); });
+      t.classList.add('actief');
+      curView = t.getAttribute('data-view');
+      curItem = views[curView].items[0].id;
+      bewerkId = null;
+      renderNav(); await renderScherm();
+    };
+  });
+
+  // ── Sidebar in-/uitklappen ───────────────────────────────────────────────
+  var sidebar = document.getElementById('fw-sidebar');
+  var collapse = document.getElementById('fw-collapse');
+  var cIcon = document.getElementById('fw-collapse-icon');
+  var collapsed = false;
+  collapse.onclick = function(){
+    collapsed = !collapsed;
+    sidebar.style.width = collapsed ? "64px" : "210px";
+    Array.prototype.forEach.call(root.querySelectorAll('.fw-lbl'), function(el){ el.style.display = collapsed ? "none" : ""; });
+    document.getElementById('fw-sel-wrap').style.padding = collapsed ? "12px 8px 10px" : "12px 12px 10px";
+    btn.style.justifyContent = collapsed ? "center" : "flex-start";
+    Array.prototype.forEach.call(root.querySelectorAll('.fw-item'), function(el){ el.style.justifyContent = collapsed ? "center" : "flex-start"; el.style.padding = collapsed ? "9px 0" : "9px 16px"; });
+    collapse.style.justifyContent = collapsed ? "center" : "flex-start";
+    cIcon.className = "ti " + (collapsed ? "ti-chevron-right" : "ti-chevron-left");
+    if(collapsed) closePanel();
+  };
+
+  // ── Periodekeuze koppelen ────────────────────────────────────────────────
+  Array.prototype.forEach.call(document.querySelectorAll('.fw-per'), function(b){
+    b.onclick = async function(){
+      periode.type = b.getAttribute('data-per');
+      Array.prototype.forEach.call(document.querySelectorAll('.fw-per'), function(x){
+        var actief = (x===b);
+        x.style.background = actief ? "var(--goud)" : "transparent";
+        x.style.color = actief ? "var(--navy)" : "#C7CEDA";
+        x.style.fontWeight = actief ? "600" : "400";
+      });
+      vulPeriodeKeuze();
+      await renderScherm();
+    };
+  });
+  document.getElementById('fw-periode-keuze').onchange = async function(){
+    var v = parseInt(this.value, 10);
+    if(periode.type==="maand") periode.maand = v; else periode.kwartaal = v;
+    await renderScherm();
+  };
+
+  // ── Start: bestaande sessie? dan direct door ─────────────────────────────
+  (async function(){
+    vulPeriodeKeuze();
+    var r = await sb.auth.getSession();
+    if(r.data && r.data.session){
+      user = r.data.session.user;
+      await naBinnenkomst();
+    }
+  })();
+})();
+</script>
+</body>
+</html>
