@@ -333,6 +333,8 @@
     return naam.trim().split(/\s+/).map(function(w){return w[0];}).join("").slice(0,2).toUpperCase();
   }
 
+  var toonGearchiveerd = false;   // schakelaar in de kiezer
+
   async function laadAdmins(){
     admins = {};
     var r = await dbClient().from('adm_administraties').select('*').order('aangemaakt');
@@ -341,13 +343,20 @@
       return;
     }
     r.data.forEach(function(a){
-      admins[a.id] = { naam:a.naam, ini:initialen(a.naam), sub:(a.kvk ? "KvK "+a.kvk : "administratie"), ritme:(a.btw_ritme || 'kwartaal') };
+      admins[a.id] = {
+        naam:a.naam, ini:initialen(a.naam),
+        sub:(a.kvk ? "KvK "+a.kvk : "administratie"),
+        ritme:(a.btw_ritme || 'kwartaal'),
+        kvk:(a.kvk||""), btw_nummer:(a.btw_nummer||""),
+        gearchiveerd:!!a.gearchiveerd
+      };
     });
-    var ids = Object.keys(admins);
-    if(ids.length){
-      if(!curAdmin || !admins[curAdmin]) curAdmin = ids[0];
+    // Actieve administratie mag niet een gearchiveerde zijn
+    var actief = Object.keys(admins).filter(function(id){ return !admins[id].gearchiveerd; });
+    if(actief.length){
+      if(!curAdmin || !admins[curAdmin] || admins[curAdmin].gearchiveerd) curAdmin = actief[0];
     } else {
-      curAdmin = null;   // nog geen administratie → renderScherm toont een aanmaakknop
+      curAdmin = null;
     }
   }
 
@@ -460,18 +469,95 @@
 
   function renderAdmins(){
     orgList.innerHTML = "";
-    Object.keys(admins).forEach(function(id){
+    var ids = Object.keys(admins).filter(function(id){ return toonGearchiveerd ? true : !admins[id].gearchiveerd; });
+    ids.forEach(function(id){
       var a = admins[id];
       var actief = (id === curAdmin);
       var d = document.createElement('div');
-      d.style.cssText = "padding:8px 10px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:8px; color:"+(actief?"var(--navy)":"var(--inkt)")+"; background:"+(actief?"var(--papier)":"transparent")+";";
+      d.style.cssText = "padding:8px 10px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:8px; color:"+(actief?"var(--navy)":"var(--inkt)")+"; background:"+(actief?"var(--papier)":"transparent")+"; opacity:"+(a.gearchiveerd?"0.55":"1")+";";
       d.innerHTML =
         '<span style="width:22px; height:22px; flex-shrink:0; border-radius:5px; background:var(--navy); color:var(--papier); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:600;">'+a.ini+'</span>'+
-        '<span style="flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'+a.naam+'</span>'+
-        (actief ? '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:14px; color:var(--groen);"><path d="M5 12l5 5L20 7"/></svg>' : '');
-      d.onclick = async function(e){ e.stopPropagation(); curAdmin = id; applyAdmin(); closePanel(); await renderScherm(); };
+        '<span style="flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'+a.naam+(a.gearchiveerd?' <span style="font-size:9px; color:var(--grijs);">· gearchiveerd</span>':'')+'</span>'+
+        (actief && !a.gearchiveerd ? '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:14px; color:var(--groen);"><path d="M5 12l5 5L20 7"/></svg>' : '')+
+        '<button data-beheer="'+id+'" title="Beheren" style="background:none; border:none; padding:2px; cursor:pointer; color:var(--grijs); flex-shrink:0; display:flex;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>';
+      d.querySelector('span:nth-child(2)').onclick = async function(e){
+        e.stopPropagation();
+        if(a.gearchiveerd){ return; }   // gearchiveerde niet activeren via klik
+        curAdmin = id; applyAdmin(); closePanel(); await renderScherm();
+      };
+      d.querySelector('[data-beheer]').onclick = function(e){ e.stopPropagation(); beheerAdmin(id); };
       orgList.appendChild(d);
     });
+
+    // Schakelaar "toon gearchiveerd"
+    var heeftArchief = Object.keys(admins).some(function(id){ return admins[id].gearchiveerd; });
+    if(heeftArchief){
+      var toggle = document.createElement('div');
+      toggle.style.cssText = "padding:7px 10px; font-size:11px; color:var(--grijs); cursor:pointer; border-top:1px solid var(--rand-licht); display:flex; align-items:center; gap:6px;";
+      toggle.innerHTML = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:13px;"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>'+
+        (toonGearchiveerd ? "Verberg gearchiveerd" : "Toon gearchiveerd");
+      toggle.onclick = function(e){ e.stopPropagation(); toonGearchiveerd = !toonGearchiveerd; renderAdmins(); };
+      orgList.appendChild(toggle);
+    }
+  }
+
+  // Beheervenster voor één administratie: hernoemen, KvK/btw, archiveren
+  async function beheerAdmin(id){
+    var a = admins[id];
+    if(!a) return;
+    var overlay = document.createElement('div');
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2100; padding:20px;";
+    var box = document.createElement('div');
+    box.style.cssText = "width:100%; max-width:420px; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25); overflow:hidden;";
+    box.innerHTML =
+      '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; font-size:13px; font-weight:700; color:#FFFFFF;">Administratie beheren</div>'+
+      '<div style="padding:18px;">'+
+        '<label style="display:block; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:4px;">Naam</label>'+
+        '<input id="bh-naam" type="text" value="'+(a.naam||"").replace(/"/g,"&quot;")+'" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); margin-bottom:12px;">'+
+        '<label style="display:block; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:4px;">KvK-nummer</label>'+
+        '<input id="bh-kvk" type="text" value="'+(a.kvk||"").replace(/"/g,"&quot;")+'" placeholder="bijv. 12345678" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); margin-bottom:12px;">'+
+        '<label style="display:block; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:4px;">Btw-nummer</label>'+
+        '<input id="bh-btw" type="text" value="'+(a.btw_nummer||"").replace(/"/g,"&quot;")+'" placeholder="bijv. NL001234567B01" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); margin-bottom:18px;">'+
+        '<div style="display:flex; gap:8px; align-items:center;">'+
+          '<button id="bh-opslaan" style="padding:9px 16px; background:var(--navy); border:1px solid var(--navy); color:var(--papier); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Opslaan</button>'+
+          '<button id="bh-annuleer" style="padding:9px 16px; background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; cursor:pointer;">Annuleren</button>'+
+          '<button id="bh-archief" style="margin-left:auto; padding:9px 16px; background:transparent; border:1px solid '+(a.gearchiveerd?"var(--groen)":"var(--goud)")+'; color:'+(a.gearchiveerd?"var(--groen)":"var(--goud)")+'; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">'+(a.gearchiveerd?"Terughalen":"Archiveren")+'</button>'+
+        '</div>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function sluit(){ document.body.removeChild(overlay); }
+
+    document.getElementById('bh-annuleer').onclick = sluit;
+
+    document.getElementById('bh-opslaan').onclick = async function(){
+      var naam = document.getElementById('bh-naam').value.trim();
+      if(!naam){ await fwMelding("Geef de administratie een naam."); return; }
+      this.textContent = "Bezig…"; this.disabled = true;
+      var r = await dbClient().from('adm_administraties').update({
+        naam:naam,
+        kvk:document.getElementById('bh-kvk').value.trim() || null,
+        btw_nummer:document.getElementById('bh-btw').value.trim() || null
+      }).eq('id', id);
+      if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
+      sluit();
+      await laadAdmins(); applyAdmin(); renderAdmins(); await renderScherm();
+    };
+
+    document.getElementById('bh-archief').onclick = async function(){
+      var wordtGearchiveerd = !a.gearchiveerd;
+      if(wordtGearchiveerd){
+        var ok = await fwBevestig(
+          "\""+a.naam+"\" archiveren?\n\nDe administratie verdwijnt uit je lijst, maar alle gegevens blijven bewaard. Je kunt hem later terughalen via \"Toon gearchiveerd\".",
+          { okLabel:"Archiveren", annuleerLabel:"Annuleren" }
+        );
+        if(!ok) return;
+      }
+      var r = await dbClient().from('adm_administraties').update({ gearchiveerd:wordtGearchiveerd }).eq('id', id);
+      if(r.error){ await fwMelding("Mislukt: " + r.error.message); return; }
+      sluit();
+      await laadAdmins(); applyAdmin(); renderAdmins(); await renderScherm();
+    };
   }
   function applyAdmin(){
     var a = admins[curAdmin];
