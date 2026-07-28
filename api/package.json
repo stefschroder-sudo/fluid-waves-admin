@@ -1,0 +1,9 @@
+{
+  "name": "fluid-waves-administratie",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fluid Waves administratie — HTML + Vercel serverfuncties",
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}
