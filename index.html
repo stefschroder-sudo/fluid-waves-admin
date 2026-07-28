@@ -264,7 +264,7 @@
       return;
     }
     r.data.forEach(function(a){
-      admins[a.id] = { naam:a.naam, ini:initialen(a.naam), sub:(a.kvk ? "KvK "+a.kvk : "administratie") };
+      admins[a.id] = { naam:a.naam, ini:initialen(a.naam), sub:(a.kvk ? "KvK "+a.kvk : "administratie"), ritme:(a.btw_ritme || 'kwartaal') };
     });
     var ids = Object.keys(admins);
     if(ids.length){
@@ -464,15 +464,14 @@
     // totaalbeeld. We berekenen het saldo van alle vier de kwartalen en trekken
     // de betaalde kwartalen eraf.
     var statusMap = await laadBtwStatus();
+    var type = ritmeVan();
+    var aantal = aantalPeriodes();
     var openstaand = 0;
-    for(var kw=1; kw<=4; kw++){
-      var saldoKw = await btwVanKwartaal(BOEKJAAR, kw);
-      var st = statusMap[BOEKJAAR + "-" + kw];
-      if(st && st.status === "betaald"){
-        // Betaald kwartaal telt niet meer mee in wat nog openstaat.
-        continue;
-      }
-      openstaand += saldoKw;
+    for(var p=1; p<=aantal; p++){
+      var saldoP = await btwVanPeriode(BOEKJAAR, type, p);
+      var st = statusMap[BOEKJAAR + "-" + type + "-" + p];
+      if(st && st.status === "betaald"){ continue; }
+      openstaand += saldoP;
     }
     document.getElementById('fw-str-btw').textContent = euroStr(Math.abs(openstaand));
     document.getElementById('fw-str-btw-label').textContent =
@@ -480,32 +479,39 @@
   }
 
   // ── BTW: status per kwartaal laden/opslaan ───────────────────────────────
+  function ritmeVan(){ return (admins[curAdmin] && admins[curAdmin].ritme) || 'kwartaal'; }
+  function aantalPeriodes(){ return ritmeVan() === 'maand' ? 12 : 4; }
+
   async function laadBtwStatus(){
     if(!curAdmin) return {};
     var r = await dbClient().from('adm_btw_status').select('*').eq('administratie_id', curAdmin);
     if(r.error){ console.error(r.error); return {}; }
     var map = {};
-    r.data.forEach(function(s){ map[s.jaar + "-" + s.kwartaal] = s; });
+    // Sleutel: jaar-type-nummer, bv. "2026-kwartaal-2" of "2026-maand-7"
+    r.data.forEach(function(s){ map[s.jaar + "-" + s.periode_type + "-" + s.periode_nummer] = s; });
     return map;
   }
 
-  async function zetBtwStatus(jaar, kwartaal, status, bedrag){
+  async function zetBtwStatus(jaar, type, nummer, status, bedrag){
     var r = await dbClient().from('adm_btw_status')
-      .upsert({ administratie_id:curAdmin, user_id:user.id, jaar:jaar, kwartaal:kwartaal,
+      .upsert({ administratie_id:curAdmin, user_id:user.id, jaar:jaar,
+                periode_type:type, periode_nummer:nummer,
                 status:status, bedrag:bedrag, bijgewerkt:new Date().toISOString() },
-              { onConflict: 'administratie_id,jaar,kwartaal' })
+              { onConflict: 'administratie_id,jaar,periode_type,periode_nummer' })
       .select().single();
     if(r.error){ alert("Opslaan status mislukt: " + r.error.message); return false; }
     return true;
   }
 
-  // BTW-saldo van één kwartaal berekenen uit de boekingen
-  async function btwVanKwartaal(jaar, kwartaal){
-    var maanden = [ (kwartaal-1)*3+1, (kwartaal-1)*3+2, (kwartaal-1)*3+3 ];
-    function inKw(d){ if(!d) return false; var dt=new Date(d); return dt.getFullYear()===jaar && maanden.indexOf(dt.getMonth()+1)>=0; }
-    var omzet  = (await laadBoekingen('omzet')).filter(function(r){ return inKw(r.datum); });
-    var inkoop = (await laadBoekingen('inkoop')).filter(function(r){ return inKw(r.datum); });
-    var kosten = (await laadBoekingen('kosten')).filter(function(r){ return inKw(r.datum); });
+  // BTW-saldo van één periode (maand of kwartaal) berekenen uit de boekingen
+  async function btwVanPeriode(jaar, type, nummer){
+    var maanden = (type === 'maand')
+      ? [ nummer ]
+      : [ (nummer-1)*3+1, (nummer-1)*3+2, (nummer-1)*3+3 ];
+    function inP(d){ if(!d) return false; var dt=new Date(d); return dt.getFullYear()===jaar && maanden.indexOf(dt.getMonth()+1)>=0; }
+    var omzet  = (await laadBoekingen('omzet')).filter(function(r){ return inP(r.datum); });
+    var inkoop = (await laadBoekingen('inkoop')).filter(function(r){ return inP(r.datum); });
+    var kosten = (await laadBoekingen('kosten')).filter(function(r){ return inP(r.datum); });
     var verschuldigd = omzet.reduce(function(s,r){ return s+(Number(r.btw_bedrag)||0); },0);
     var voorbelasting = inkoop.concat(kosten).reduce(function(s,r){ return s+(Number(r.btw_bedrag)||0); },0);
     return Math.round((verschuldigd - voorbelasting)*100)/100;
@@ -818,27 +824,41 @@
   // ── BTW-scherm ────────────────────────────────────────────────────────────
   async function schermBtw(){
     var jaar = BOEKJAAR;
+    var type = ritmeVan();
     var statusMap = await laadBtwStatus();
 
     var statusTekst = { open:"Open", aangegeven:"Aangegeven", betaald:"Betaald" };
     var statusKleur = { open:"var(--grijs)", aangegeven:"var(--goud)", betaald:"var(--groen)" };
 
-    var html = '<div style="font-size:12px; color:var(--grijs); margin-bottom:14px;">'+
-               'Per kwartaal het berekende btw-saldo. Markeer wanneer de aangifte is gedaan en betaald; '+
-               'betaalde kwartalen tellen niet meer mee in het openstaande bedrag bovenin.</div>';
+    var maandNamen = ["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
+    var kwNamen = ["Q1 · jan-mrt","Q2 · apr-jun","Q3 · jul-sep","Q4 · okt-dec"];
 
-    for(var kw=1; kw<=4; kw++){
-      var saldo = await btwVanKwartaal(jaar, kw);
-      var st = statusMap[jaar + "-" + kw];
+    // Ritmekeuze bovenaan — bewaard per administratie
+    var html =
+      '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">'+
+        '<div style="font-size:12px; color:var(--grijs); max-width:60%;">Per periode het berekende btw-saldo. Markeer wanneer de aangifte is gedaan en betaald; betaalde periodes tellen niet meer mee in het openstaande bedrag bovenin.</div>'+
+        '<div style="display:flex; align-items:center; gap:8px;">'+
+          '<span style="font-size:11px; color:var(--grijs);">Aangifteritme:</span>'+
+          '<div style="display:flex; border:1px solid var(--rand); border-radius:8px; overflow:hidden;">'+
+            '<button data-ritme="kwartaal" style="border:none; padding:6px 12px; font-size:11.5px; cursor:pointer; background:'+(type==="kwartaal"?"var(--navy)":"var(--wit)")+'; color:'+(type==="kwartaal"?"var(--papier)":"var(--grijs)")+'; font-weight:'+(type==="kwartaal"?"600":"400")+';">Kwartaal</button>'+
+            '<button data-ritme="maand" style="border:none; border-left:1px solid var(--rand); padding:6px 12px; font-size:11.5px; cursor:pointer; background:'+(type==="maand"?"var(--navy)":"var(--wit)")+'; color:'+(type==="maand"?"var(--papier)":"var(--grijs)")+'; font-weight:'+(type==="maand"?"600":"400")+';">Maand</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+
+    var aantal = (type === 'maand') ? 12 : 4;
+    for(var p=1; p<=aantal; p++){
+      var saldo = await btwVanPeriode(jaar, type, p);
+      var st = statusMap[jaar + "-" + type + "-" + p];
       var status = st ? st.status : "open";
       var teBetalen = saldo >= 0;
-      var kwLabel = ["Q1 · jan-mrt","Q2 · apr-jun","Q3 · jul-sep","Q4 · okt-dec"][kw-1];
+      var label = (type === 'maand') ? maandNamen[p-1] : kwNamen[p-1];
 
       html +=
         '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-left:3px solid '+statusKleur[status]+'; border-radius:10px; padding:13px 16px; margin-bottom:10px;">'+
           '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">'+
             '<div>'+
-              '<div style="font-size:13px; font-weight:700; color:var(--navy);">'+kwLabel+' '+jaar+'</div>'+
+              '<div style="font-size:13px; font-weight:700; color:var(--navy);">'+label+' '+jaar+'</div>'+
               '<div style="font-size:11.5px; color:'+statusKleur[status]+'; font-weight:600; margin-top:2px;">'+statusTekst[status]+'</div>'+
             '</div>'+
             '<div style="text-align:right;">'+
@@ -847,45 +867,56 @@
             '</div>'+
           '</div>'+
           '<div style="display:flex; gap:8px; margin-top:12px;">'+
-            knopBtw(kw, "aangegeven", "Aangifte gedaan", status)+
-            knopBtw(kw, "betaald", "Betaald", status)+
-            (status !== "open" ? '<button data-btw-reset="'+kw+'" style="margin-left:auto; background:none; border:none; color:var(--grijs); font-size:11px; cursor:pointer;">Terugzetten</button>' : '')+
+            knopBtw(p, "aangegeven", "Aangifte gedaan", status)+
+            knopBtw(p, "betaald", "Betaald", status)+
+            (status !== "open" ? '<button data-btw-reset="'+p+'" style="margin-left:auto; background:none; border:none; color:var(--grijs); font-size:11px; cursor:pointer;">Terugzetten</button>' : '')+
           '</div>'+
         '</div>';
     }
 
     schermEl.innerHTML = html;
 
-    // Knoppen koppelen
+    // Ritme-knoppen
+    Array.prototype.forEach.call(schermEl.querySelectorAll('[data-ritme]'), function(b){
+      b.onclick = async function(){
+        var nieuwRitme = b.getAttribute('data-ritme');
+        if(nieuwRitme === ritmeVan()) return;
+        var r = await dbClient().from('adm_administraties').update({ btw_ritme:nieuwRitme }).eq('id', curAdmin);
+        if(r.error){ alert("Ritme opslaan mislukt: " + r.error.message); return; }
+        admins[curAdmin].ritme = nieuwRitme;
+        await renderScherm();
+      };
+    });
+
+    // Status-knoppen (type meesturen)
     Array.prototype.forEach.call(schermEl.querySelectorAll('[data-btw-set]'), function(b){
       b.onclick = async function(){
-        var kw = parseInt(b.getAttribute('data-btw-set'), 10);
+        var nummer = parseInt(b.getAttribute('data-btw-set'), 10);
         var status = b.getAttribute('data-btw-status');
-        var saldo = await btwVanKwartaal(jaar, kw);
+        var saldo = await btwVanPeriode(jaar, type, nummer);
         b.textContent = "Bezig…"; b.disabled = true;
-        var ok = await zetBtwStatus(jaar, kw, status, saldo);
+        var ok = await zetBtwStatus(jaar, type, nummer, status, saldo);
         if(ok) await renderScherm();
       };
     });
     Array.prototype.forEach.call(schermEl.querySelectorAll('[data-btw-reset]'), function(b){
       b.onclick = async function(){
-        var kw = parseInt(b.getAttribute('data-btw-reset'), 10);
-        var ok = await zetBtwStatus(jaar, kw, "open", null);
+        var nummer = parseInt(b.getAttribute('data-btw-reset'), 10);
+        var ok = await zetBtwStatus(jaar, type, nummer, "open", null);
         if(ok) await renderScherm();
       };
     });
   }
 
-  function knopBtw(kw, status, label, huidig){
-    // Actief-markering: aangegeven is bereikt bij 'aangegeven' én 'betaald'
+  function knopBtw(nummer, status, label, huidig){
     var bereikt = (status === "aangegeven" && (huidig === "aangegeven" || huidig === "betaald"))
                || (status === "betaald" && huidig === "betaald");
     var kleur = bereikt ? (status === "betaald" ? "var(--groen)" : "var(--goud)") : "var(--navy)";
     var bg = bereikt ? "#F1F6F1" : "transparent";
-    return '<button data-btw-set="'+kw+'" data-btw-status="'+status+'" '+
+    return '<button data-btw-set="'+nummer+'" data-btw-status="'+status+'" '+
            'style="padding:6px 12px; border:1px solid '+kleur+'; background:'+bg+'; color:'+kleur+'; '+
            'border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;">'+
-           (bereikt ? "✓ " : "")+label+'</button>';
+           (bereikt ? "\u2713 " : "")+label+'</button>';
   }
 
   // ── Bovenmenu ────────────────────────────────────────────────────────────
