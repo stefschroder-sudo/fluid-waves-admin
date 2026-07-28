@@ -233,7 +233,7 @@
   function fwDialoog(opts){
     return new Promise(function(resolve){
       var overlay = document.createElement('div');
-      overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2000; padding:20px;";
+      overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2200; padding:20px;";
 
       var box = document.createElement('div');
       box.style.cssText = "width:100%; max-width:"+(opts.breed?"620px":"400px")+"; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25); overflow:hidden;";
@@ -547,15 +547,17 @@
     document.getElementById('bh-archief').onclick = async function(){
       var wordtGearchiveerd = !a.gearchiveerd;
       if(wordtGearchiveerd){
+        sluit();   // beheervenster eerst weg, anders opent de bevestiging erachter
         var ok = await fwBevestig(
           "\""+a.naam+"\" archiveren?\n\nDe administratie verdwijnt uit je lijst, maar alle gegevens blijven bewaard. Je kunt hem later terughalen via \"Toon gearchiveerd\".",
           { okLabel:"Archiveren", annuleerLabel:"Annuleren" }
         );
-        if(!ok) return;
+        if(!ok){ return; }
+      } else {
+        sluit();
       }
       var r = await dbClient().from('adm_administraties').update({ gearchiveerd:wordtGearchiveerd }).eq('id', id);
       if(r.error){ await fwMelding("Mislukt: " + r.error.message); return; }
-      sluit();
       await laadAdmins(); applyAdmin(); renderAdmins(); await renderScherm();
     };
   }
