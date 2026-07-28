@@ -412,6 +412,8 @@
   var curItem = "omzet";
   var BOEKJAAR = 2026;
   var bewerkId = null;   // id van de regel die nu bewerkt wordt, of null bij nieuw
+  var factuurWachtrij = [];   // stapel bestanden die nog verwerkt moeten worden
+  var factuurIndex = 0;       // welke van de stapel nu in het formulier staat
 
   // ── Periodekeuze (bovenbalk, geldt overal) ───────────────────────────────
   var MAANDEN = ["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
@@ -504,7 +506,7 @@
       d.style.cssText = "display:flex; align-items:center; gap:10px; padding:9px 16px; border-radius:8px; font-size:12.5px; color:var(--inkt);";
       d.title = it.label;
       d.innerHTML = ic(it.icon, 'style="font-size:17px; color:var(--navy);"')+'<span class="fw-lbl">'+it.label+'</span>';
-      d.onclick = function(){ curItem = it.id; bewerkId = null; renderNav(); renderScherm(); };
+      d.onclick = function(){ curItem = it.id; bewerkId = null; factuurWachtrij = []; factuurIndex = 0; renderNav(); renderScherm(); };
       navEl.appendChild(d);
     });
   }
@@ -680,8 +682,8 @@
         '<input id="o-oms" type="text" placeholder="Omschrijving (optioneel)" style="width:100%; margin-top:8px; padding:8px 10px; border:1px solid var(--rand); border-radius:8px; font-size:12.5px; background:#fff;">'+
         '<div id="o-drop" style="margin-top:10px; border:1.5px dashed var(--rand); border-radius:8px; padding:12px; text-align:center; cursor:pointer; background:#fff;">'+
           '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:18px; color:var(--goud);"><path d="M12 15V3M8 7l4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'+
-          '<span id="o-drop-tekst" style="font-size:11.5px; color:var(--grijs); margin-left:6px;">'+(huidige && huidige.bestand_pad ? 'Bewijsstuk aanwezig — kies een nieuw bestand om te vervangen' : ('Sleep een '+cfg.factuurwoord+' hierheen of klik om te kiezen (pdf, jpg, png)'))+'</span>'+
-          '<input id="o-file" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">'+
+          '<span id="o-drop-tekst" style="font-size:11.5px; color:var(--grijs); margin-left:6px;">'+(huidige && huidige.bestand_pad ? 'Bewijsstuk aanwezig — kies een nieuw bestand om te vervangen' : ('Sleep een of meer '+cfg.factuurwoord+'-bestanden hierheen of klik om te kiezen (pdf, jpg, png)'))+'</span>'+
+          '<input id="o-file" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style="display:none;">'+
         '</div>'+
       '</div>';
 
@@ -724,16 +726,64 @@
     var drop = document.getElementById('o-drop');
     var fileInput = document.getElementById('o-file');
     var gekozenBestand = null;
+    var tekstEl = document.getElementById('o-drop-tekst');
+
     drop.onclick = function(){ fileInput.click(); };
     drop.ondragover = function(e){ e.preventDefault(); drop.style.borderColor="var(--goud)"; };
     drop.ondragleave = function(){ drop.style.borderColor="var(--rand)"; };
-    drop.ondrop = function(e){ e.preventDefault(); drop.style.borderColor="var(--rand)"; if(e.dataTransfer.files[0]){ gekozenBestand=e.dataTransfer.files[0]; toonBestandsnaam(); herkenFactuur(); } };
-    fileInput.onchange = function(){ if(fileInput.files[0]){ gekozenBestand=fileInput.files[0]; toonBestandsnaam(); herkenFactuur(); } };
-    function toonBestandsnaam(){ document.getElementById('o-drop-tekst').textContent = gekozenBestand.name; }
+    drop.ondrop = function(e){ e.preventDefault(); drop.style.borderColor="var(--rand)"; verwerkBestanden(e.dataTransfer.files); };
+    fileInput.onchange = function(){ verwerkBestanden(fileInput.files); };
+
+    // Eén of meer bestanden in de wachtrij zetten en de eerste starten
+    function verwerkBestanden(fileList){
+      if(!fileList || !fileList.length) return;
+      factuurWachtrij = Array.prototype.slice.call(fileList);
+      factuurIndex = 0;
+      startVolgende();
+    }
+
+    // Volgende bestand uit de wachtrij in het formulier laden
+    function startVolgende(){
+      if(factuurIndex >= factuurWachtrij.length){
+        factuurWachtrij = []; factuurIndex = 0; gekozenBestand = null;
+        tekstEl.textContent = "Sleep een of meer bestanden hierheen of klik om te kiezen (pdf, jpg, png)";
+        toonWachtrijBalk();
+        return;
+      }
+      gekozenBestand = factuurWachtrij[factuurIndex];
+      toonWachtrijBalk();
+      herkenFactuur();
+    }
+
+    // Balkje boven het formulier dat de voortgang en een annuleerknop toont
+    function toonWachtrijBalk(){
+      var oud = document.getElementById('o-wachtrij');
+      if(oud) oud.remove();
+      if(factuurWachtrij.length <= 0) return;
+      var balk = document.createElement('div');
+      balk.id = "o-wachtrij";
+      balk.style.cssText = "display:flex; align-items:center; gap:10px; background:#FBF6E6; border:1px solid var(--goud); border-radius:8px; padding:8px 12px; margin-bottom:12px; font-size:12px; color:var(--navy);";
+      balk.innerHTML =
+        '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--goud);"><path d="M8 4h7l4 4v10a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M4 8v11a1 1 0 0 0 1 1h9"/></svg>'+
+        '<span style="flex:1;">Factuur <b>'+(factuurIndex+1)+'</b> van <b>'+factuurWachtrij.length+'</b>'+(gekozenBestand?' · '+gekozenBestand.name:'')+'</span>'+
+        '<button id="o-wachtrij-skip" style="background:none; border:1px solid var(--goud); color:var(--navy); border-radius:6px; font-size:11px; padding:4px 10px; cursor:pointer;">Overslaan</button>'+
+        '<button id="o-wachtrij-stop" style="background:none; border:none; color:var(--grijs); font-size:11px; cursor:pointer;">Stoppen</button>';
+      schermEl.insertBefore(balk, schermEl.firstChild);
+      document.getElementById('o-wachtrij-skip').onclick = function(){ factuurIndex++; leegFormulier(); startVolgende(); };
+      document.getElementById('o-wachtrij-stop').onclick = function(){ factuurWachtrij=[]; factuurIndex=0; gekozenBestand=null; leegFormulier(); toonWachtrijBalk(); };
+    }
+
+    function leegFormulier(){
+      document.getElementById('o-datum').value = new Date().toISOString().slice(0,10);
+      document.getElementById('o-klant').value = "";
+      document.getElementById('o-excl').value = "";
+      document.getElementById('o-btw').value = "21";
+      document.getElementById('o-oms').value = "";
+      tekstEl.textContent = "Sleep een of meer bestanden hierheen of klik om te kiezen (pdf, jpg, png)";
+    }
 
     async function herkenFactuur(){
-      var tekstEl = document.getElementById('o-drop-tekst');
-      tekstEl.textContent = "Factuur wordt gelezen…";
+      tekstEl.textContent = (gekozenBestand?gekozenBestand.name+" — ":"") + "wordt gelezen…";
       try {
         var base64 = await bestandNaarBase64(gekozenBestand);
         var r = await fetch("/api/extract", {
@@ -778,6 +828,12 @@
       return "image/jpeg";
     }
 
+    // Bij binnenkomst van het scherm: als er nog een wachtrij liep, balk tonen
+    if(factuurWachtrij.length && factuurIndex < factuurWachtrij.length){
+      gekozenBestand = factuurWachtrij[factuurIndex];
+      toonWachtrijBalk();
+    }
+
     var annBtn = document.getElementById('o-annuleer');
     if(annBtn){ annBtn.onclick = async function(){ bewerkId = null; await renderScherm(); }; }
 
@@ -810,7 +866,18 @@
       var ok;
       if(bewerken){ ok = await wijzigBoeking(bewerkId, rec); bewerkId = null; }
       else { ok = await bewaarBoeking(rec); }
-      if(ok) await renderScherm();
+
+      if(ok){
+        // In een wachtrij? Dan door naar de volgende factuur, zonder het scherm te verliezen.
+        if(factuurWachtrij.length && factuurIndex < factuurWachtrij.length){
+          factuurIndex++;
+          await renderScherm();   // herbouwt het scherm; de wachtrij-check pakt de volgende op
+        } else {
+          await renderScherm();
+        }
+      } else {
+        this.textContent = bewerken?"Bijwerken":"Opslaan"; this.disabled=false;
+      }
     };
 
     Array.prototype.forEach.call(schermEl.querySelectorAll('[data-edit]'), function(rij){
@@ -1006,7 +1073,7 @@
       t.classList.add('actief');
       curView = t.getAttribute('data-view');
       curItem = views[curView].items[0].id;
-      bewerkId = null;
+      bewerkId = null; factuurWachtrij = []; factuurIndex = 0;
       renderNav(); await renderScherm();
     };
   });
