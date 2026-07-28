@@ -230,7 +230,7 @@
       overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2000; padding:20px;";
 
       var box = document.createElement('div');
-      box.style.cssText = "width:100%; max-width:400px; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25); overflow:hidden;";
+      box.style.cssText = "width:100%; max-width:"+(opts.breed?"620px":"400px")+"; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25); overflow:hidden;";
 
       var kop = document.createElement('div');
       kop.style.cssText = "background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; font-size:13px; font-weight:700; color:#FFFFFF;";
@@ -240,8 +240,8 @@
       body.style.cssText = "padding:18px;";
 
       var tekst = document.createElement('div');
-      tekst.style.cssText = "font-size:12.5px; color:var(--inkt); line-height:1.5; white-space:pre-line; margin-bottom:16px;";
-      tekst.textContent = opts.tekst || "";
+      tekst.style.cssText = "font-size:12.5px; color:var(--inkt); line-height:1.5; white-space:"+(opts.html?"normal":"pre-line")+"; margin-bottom:16px;";
+      if(opts.html){ tekst.innerHTML = opts.tekst || ""; } else { tekst.textContent = opts.tekst || ""; }
       body.appendChild(tekst);
 
       var invoer = null;
@@ -286,7 +286,7 @@
       overlay.addEventListener('keydown', function(e){ if(e.key==="Escape" && opts.type!=="melding"){ sluit(opts.type==="vraag"?null:false); } });
     });
   }
-  function fwMelding(tekst, titel){ return fwDialoog({ type:"melding", tekst:tekst, titel:titel }); }
+  function fwMelding(tekst, titel, opts){ opts=opts||{}; return fwDialoog({ type:"melding", tekst:tekst, titel:titel, breed:opts.breed, html:opts.html }); }
   function fwBevestig(tekst, opts){ opts=opts||{}; return fwDialoog({ type:"bevestig", tekst:tekst, titel:opts.titel, okLabel:opts.okLabel, annuleerLabel:opts.annuleerLabel }); }
   function fwVraag(tekst, standaard, titel){ return fwDialoog({ type:"vraag", tekst:tekst, standaard:standaard, titel:titel }); }
 
@@ -590,6 +590,39 @@
     return Math.round((verschuldigd - voorbelasting)*100)/100;
   }
 
+  // Officiële aangifte-rubrieken (1a t/m 5g) berekenen uit de boekingen van een periode
+  async function aangifteRubrieken(jaar, type, nummer){
+    var maanden = (type === 'maand')
+      ? [ nummer ]
+      : [ (nummer-1)*3+1, (nummer-1)*3+2, (nummer-1)*3+3 ];
+    function inP(d){ if(!d) return false; var dt=new Date(d); return dt.getFullYear()===jaar && maanden.indexOf(dt.getMonth()+1)>=0; }
+    var omzet  = (await laadBoekingen('omzet')).filter(function(r){ return inP(r.datum); });
+    var inkoop = (await laadBoekingen('inkoop')).filter(function(r){ return inP(r.datum); });
+    var kosten = (await laadBoekingen('kosten')).filter(function(r){ return inP(r.datum); });
+
+    function sommeer(rows, testPct){
+      return rows.filter(function(r){ return testPct(parseInt(r.btw_pct,10)||0); })
+                 .reduce(function(a,r){ a.excl += Number(r.bedrag_excl)||0; a.btw += Number(r.btw_bedrag)||0; return a; },
+                         {excl:0, btw:0});
+    }
+    var r1a = sommeer(omzet, function(p){ return p===21; });
+    var r1b = sommeer(omzet, function(p){ return p===9; });
+    var r1c = sommeer(omzet, function(p){ return p!==21 && p!==9 && p!==0; });
+    var r1e = sommeer(omzet, function(p){ return p===0; });
+
+    var voorbelasting = inkoop.concat(kosten).reduce(function(s,r){ return s+(Number(r.btw_bedrag)||0); },0);
+    var verschuldigd = r1a.btw + r1b.btw + r1c.btw;   // 1e is 0% → geen btw
+    var teBetalen = Math.round((verschuldigd - voorbelasting)*100)/100;
+
+    function rond(o){ return { excl: Math.round(o.excl*100)/100, btw: Math.round(o.btw*100)/100 }; }
+    return {
+      r1a: rond(r1a), r1b: rond(r1b), r1c: rond(r1c), r1e: rond(r1e),
+      verschuldigd: Math.round(verschuldigd*100)/100,
+      voorbelasting: Math.round(voorbelasting*100)/100,
+      teBetalen: teBetalen
+    };
+  }
+
   // ── Rechterscherm ────────────────────────────────────────────────────────
   var titelEl = document.getElementById('fw-titel');
   var subEl = document.getElementById('fw-subtitel');
@@ -770,6 +803,14 @@
     exclEl.addEventListener('input', vanExcl);
     btwbEl.addEventListener('input', vanBtwBedrag);
     inclEl.addEventListener('input', vanIncl);
+    // Bij verlaten van een bedragveld netjes op twee decimalen tonen
+    function netjes(el){
+      el.addEventListener('blur', function(){
+        var v = parseFloat(el.value);
+        el.value = isNaN(v) ? "" : v.toFixed(2);
+      });
+    }
+    netjes(exclEl); netjes(btwbEl); netjes(inclEl);
     pctEl.addEventListener('change', function(){
       // Bij wijzigen van het % opnieuw rekenen vanuit excl. (of incl. als excl. leeg is)
       if(parseFloat(exclEl.value)) vanExcl();
@@ -1076,9 +1117,10 @@
               '<div style="font-size:17px; font-weight:700; color:var(--navy);">'+euroStr(Math.abs(saldo))+'</div>'+
             '</div>'+
           '</div>'+
-          '<div style="display:flex; gap:8px; margin-top:12px;">'+
+          '<div style="display:flex; gap:8px; margin-top:12px; align-items:center;">'+
             knopBtw(p, "aangegeven", "Aangifte gedaan", status)+
             knopBtw(p, "betaald", "Betaald", status)+
+            '<button data-btw-aangifte="'+p+'" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:7px; font-size:11.5px; font-weight:600; padding:6px 12px; cursor:pointer;">Toon aangifte</button>'+
             (status !== "open" ? '<button data-btw-reset="'+p+'" style="margin-left:auto; background:none; border:none; color:var(--grijs); font-size:11px; cursor:pointer;">Terugzetten</button>' : '')+
           '</div>'+
         '</div>';
@@ -1123,6 +1165,69 @@
         if(ok) await renderScherm();
       };
     });
+    Array.prototype.forEach.call(schermEl.querySelectorAll('[data-btw-aangifte]'), function(b){
+      b.onclick = async function(){
+        var nummer = parseInt(b.getAttribute('data-btw-aangifte'), 10);
+        await toonAangifte(jaar, type, nummer);
+      };
+    });
+  }
+
+  // Officieel aangifte-overzicht (rubrieken 1a t/m 5g) tonen in een dialoog
+  async function toonAangifte(jaar, type, nummer){
+    var r = await aangifteRubrieken(jaar, type, nummer);
+    var maandNamen = ["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
+    var kwNamen = ["Q1 (jan-mrt)","Q2 (apr-jun)","Q3 (jul-sep)","Q4 (okt-dec)"];
+    var perLabel = (type === 'maand') ? maandNamen[nummer-1] : kwNamen[nummer-1];
+
+    function rij(nr, oms, excl, btw, opts){
+      opts = opts || {};
+      var exclCel = (excl === null) ? "—" : euroStr(excl);
+      var btwCel = (btw === null) ? "—" : euroStr(btw);
+      return '<tr style="'+(opts.kop?'background:var(--papier);':'')+'">'+
+        '<td style="padding:5px 8px; font-size:11px; color:var(--grijs); white-space:nowrap;">'+nr+'</td>'+
+        '<td style="padding:5px 8px; font-size:11.5px; color:var(--inkt); '+(opts.vet?'font-weight:700;':'')+'">'+oms+'</td>'+
+        '<td style="padding:5px 8px; font-size:11.5px; text-align:right; color:var(--inkt);">'+exclCel+'</td>'+
+        '<td style="padding:5px 8px; font-size:11.5px; text-align:right; color:var(--inkt); '+(opts.vet?'font-weight:700;':'')+'">'+btwCel+'</td>'+
+      '</tr>';
+    }
+    function sectie(titel){
+      return '<tr><td colspan="4" style="padding:8px 8px 3px; font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--goud); font-weight:700;">'+titel+'</td></tr>';
+    }
+
+    var tabel =
+      '<div style="max-height:56vh; overflow:auto; border:1px solid var(--rand-licht); border-radius:8px;">'+
+      '<table style="width:100%; border-collapse:collapse;">'+
+        '<thead><tr style="background:var(--navy);">'+
+          '<th style="padding:6px 8px; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); text-align:left;">Nr</th>'+
+          '<th style="padding:6px 8px; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); text-align:left;">Omschrijving</th>'+
+          '<th style="padding:6px 8px; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); text-align:right;">Grondslag</th>'+
+          '<th style="padding:6px 8px; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); text-align:right;">Btw</th>'+
+        '</tr></thead><tbody>'+
+        sectie("Rubriek 1 — Prestaties binnenland")+
+        rij("1a", "Leveringen/diensten belast met 21%", r.r1a.excl, r.r1a.btw)+
+        rij("1b", "Leveringen/diensten belast met 9%", r.r1b.excl, r.r1b.btw)+
+        rij("1c", "Leveringen/diensten overige tarieven", r.r1c.excl, r.r1c.btw)+
+        rij("1e", "Leveringen/diensten belast met 0% (export)", r.r1e.excl, 0)+
+        sectie("Rubriek 2 — Verleggingsregelingen binnenland")+
+        rij("2a", "Heffing naar u verlegd", 0, 0)+
+        sectie("Rubriek 3 — Prestaties naar/in het buitenland")+
+        rij("3a", "Leveringen buiten de EU (export)", 0, null)+
+        rij("3b", "Leveringen naar/in EU-landen", 0, null)+
+        sectie("Rubriek 4 — Prestaties vanuit het buitenland aan u")+
+        rij("4a", "Leveringen/diensten vanuit EU aan u", 0, 0)+
+        rij("4b", "Diensten van buiten de EU aan u", 0, 0)+
+        sectie("Rubriek 5 — Voorbelasting en saldo")+
+        rij("5a", "Verschuldigde omzetbelasting (1 t/m 4)", null, r.verschuldigd, {vet:true})+
+        rij("5b", "Voorbelasting (btw op inkopen en kosten)", null, r.voorbelasting)+
+        rij("5g", (r.teBetalen >= 0 ? "TE BETALEN aan Belastingdienst" : "TE ONTVANGEN van Belastingdienst"), null, Math.abs(r.teBetalen), {vet:true, kop:true})+
+      '</tbody></table></div>'+
+      '<div style="font-size:10.5px; color:var(--grijs); margin-top:10px; line-height:1.4;">'+
+        'Rubrieken 2, 3 en 4 staan op nul: de app boekt nu geen verlegging, export of buitenlandse inkoop. '+
+        'Controleer of dat voor deze periode klopt. Dit overzicht is een hulpmiddel ter controle — u keurt zelf goed.'+
+      '</div>';
+
+    await fwMelding(tabel, "Aangifte-overzicht · " + perLabel + " " + jaar, {breed:true, html:true});
   }
 
   function knopBtw(nummer, status, label, huidig){
