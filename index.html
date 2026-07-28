@@ -1205,7 +1205,9 @@
     // BTW-aangifte: overzicht per kwartaal met status en knoppen
     if(curView === "btw"){
       schermEl.innerHTML = '<div class="fw-leeg"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6V3M12 21v-3M6 12H3M21 12h-3"/></svg>Laden…</div>';
-      await schermBtw();
+      if(curItem === "herkomst"){ await schermHerkomst(); }
+      else if(curItem === "btw-export"){ await schermBtwExport(); }
+      else { await schermBtw(); }   // 'opstellen' en 'suppletie' → de kwartaalblokken
       return;
     }
 
@@ -1430,6 +1432,127 @@
            'style="padding:6px 12px; border:1px solid '+kleur+'; background:'+bg+'; color:'+kleur+'; '+
            'border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;">'+
            (bereikt ? "\u2713 " : "")+label+'</button>';
+  }
+
+  // ── Herkomst per bestand: alle geüploade documenten met downloadknop ──────
+  async function schermHerkomst(){
+    var alle = [];
+    var omzet  = await laadBoekingen('omzet');
+    var inkoop = await laadBoekingen('inkoop');
+    var kosten = await laadBoekingen('kosten');
+    alle = omzet.concat(inkoop).concat(kosten)
+             .filter(function(r){ return r.bestand_pad; })
+             .filter(function(r){ return inPeriode(r.datum); })
+             .sort(function(a,b){ return (b.datum||"").localeCompare(a.datum||""); });
+
+    var soortLabel = { omzet:"Omzet", inkoop:"Inkoopfactuur", kosten:"Kosten" };
+
+    var html = '<div style="font-size:12px; color:var(--grijs); margin-bottom:14px;">'+
+      'Alle geüploade bewijsstukken in '+periodeLabel()+'. Klik op een regel om het document te openen of te downloaden.</div>';
+
+    if(!alle.length){
+      html += '<div class="fw-leeg"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h7l4 4v10a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M4 8v11a1 1 0 0 0 1 1h9"/></svg>'+
+        '<div style="font-size:12px;">Geen geüploade documenten in '+periodeLabel()+'. Kies een andere periode of upload facturen bij Invoeren.</div></div>';
+    } else {
+      html += '<div style="border:1px solid var(--rand-licht); border-radius:10px; overflow:hidden;">';
+      alle.forEach(function(r, i){
+        var naamBestand = r.bron && r.bron !== 'handmatig' ? r.bron : (r.bestand_pad.split('_').slice(1).join('_') || 'bestand');
+        html +=
+          '<div data-doc="'+r.bestand_pad+'" style="display:flex; align-items:center; gap:12px; padding:11px 14px; cursor:pointer; '+(i?'border-top:1px solid var(--rand-licht);':'')+'">'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--goud); font-size:18px; flex-shrink:0;"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>'+
+            '<div style="flex:1; min-width:0;">'+
+              '<div style="font-size:12.5px; font-weight:600; color:var(--inkt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+naamBestand+'</div>'+
+              '<div style="font-size:11px; color:var(--grijs);">'+(r.datum||'—')+' · '+(soortLabel[r.soort]||r.soort)+' · '+(r.naam||'—')+'</div>'+
+            '</div>'+
+            '<span style="font-size:12px; font-weight:600; color:var(--navy); white-space:nowrap;">'+eur(r.bedrag_incl)+'</span>'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--navy); font-size:16px; flex-shrink:0;"><path d="M12 3v12M8 11l4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'+
+          '</div>';
+      });
+      html += '</div>';
+    }
+    schermEl.innerHTML = html;
+
+    Array.prototype.forEach.call(schermEl.querySelectorAll('[data-doc]'), function(el){
+      el.onclick = async function(){ await openBestand(el.getAttribute('data-doc')); };
+    });
+  }
+
+  // ── Losse BTW-aangifte exporteren (alleen de aangifte, één tabblad) ───────
+  async function schermBtwExport(){
+    var type = ritmeVan();
+    var aantal = aantalPeriodes();
+    var maandNamen = ["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
+    var kwNamen = ["Q1 (jan-mrt)","Q2 (apr-jun)","Q3 (jul-sep)","Q4 (okt-dec)"];
+
+    var html = '<div style="font-size:12px; color:var(--grijs); margin-bottom:14px;">'+
+      'Download een losse btw-aangifte per '+(type==="maand"?"maand":"kwartaal")+' — alleen de aangifte zelf, zonder de onderliggende regels. '+
+      'Voor het volledige overzicht met alle tabbladen: gebruik de export op het dashboard.</div>';
+    html += '<div style="border:1px solid var(--rand-licht); border-radius:10px; overflow:hidden;">';
+    for(var p=1; p<=aantal; p++){
+      var label = (type==="maand") ? maandNamen[p-1] : kwNamen[p-1];
+      html +=
+        '<div style="display:flex; align-items:center; gap:12px; padding:11px 14px; '+(p>1?'border-top:1px solid var(--rand-licht);':'')+'">'+
+          '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--goud); font-size:17px;"><path d="M5 21V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16l-3-2-2 2-2-2-2 2-2-2z"/></svg>'+
+          '<span style="flex:1; font-size:12.5px; font-weight:600; color:var(--inkt);">'+label+' '+BOEKJAAR+'</span>'+
+          '<button data-aangifte-export="'+p+'" style="display:inline-flex; align-items:center; gap:6px; background:var(--navy); color:var(--papier); border:none; border-radius:7px; font-size:11.5px; font-weight:600; padding:7px 12px; cursor:pointer;">'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:14px;"><path d="M12 3v12M8 11l4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Excel</button>'+
+        '</div>';
+    }
+    html += '</div>';
+    schermEl.innerHTML = html;
+
+    Array.prototype.forEach.call(schermEl.querySelectorAll('[data-aangifte-export]'), function(b){
+      b.onclick = async function(){
+        var nummer = parseInt(b.getAttribute('data-aangifte-export'), 10);
+        b.textContent = "Bezig…"; b.disabled = true;
+        try { await exporteerAangifte(type, nummer); }
+        catch(e){ await fwMelding("Export mislukt: " + (e.message||e)); }
+        await renderScherm();
+      };
+    });
+  }
+
+  // Losse aangifte als Excel met één tabblad
+  async function exporteerAangifte(type, nummer){
+    var maandNamen = ["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
+    var kwNamen = ["Q1 (jan-mrt)","Q2 (apr-jun)","Q3 (jul-sep)","Q4 (okt-dec)"];
+    var label = (type==="maand") ? maandNamen[nummer-1] : kwNamen[nummer-1];
+    var r = await aangifteRubrieken(BOEKJAAR, type, nummer);
+    var adminNaam = admins[curAdmin] ? admins[curAdmin].naam : "Administratie";
+    var n2 = function(v){ return Math.round((Number(v)||0)*100)/100; };
+
+    var data = [
+      ["BTW-AANGIFTE OMZETBELASTING — "+label+" "+BOEKJAAR],
+      [adminNaam+(admins[curAdmin]&&admins[curAdmin].sub?"   |   "+admins[curAdmin].sub:"")+"   |   Aangemaakt: "+new Date().toLocaleDateString('nl-NL')],
+      [],
+      ["Nr.","Omschrijving","Grondslag (excl. btw)","Btw-bedrag"],
+      ["RUBRIEK 1 — Prestaties binnenland"],
+      ["1a","Leveringen/diensten belast met hoog tarief (21%)", n2(r.r1a.excl), n2(r.r1a.btw)],
+      ["1b","Leveringen/diensten belast met laag tarief (9%)", n2(r.r1b.excl), n2(r.r1b.btw)],
+      ["1c","Leveringen/diensten belast met overige tarieven", n2(r.r1c.excl), n2(r.r1c.btw)],
+      ["1e","Leveringen/diensten belast met 0% (export)", n2(r.r1e.excl), 0],
+      ["RUBRIEK 2 — Verleggingsregelingen binnenland"],
+      ["2a","Heffing naar u verlegd", 0, 0],
+      ["RUBRIEK 3 — Prestaties naar/in het buitenland"],
+      ["3a","Leveringen buiten de EU (export, 0%)", "n.v.t.", "n.v.t."],
+      ["3b","Leveringen naar/in EU-landen", "n.v.t.", "n.v.t."],
+      ["RUBRIEK 4 — Prestaties vanuit het buitenland aan u"],
+      ["4a","Leveringen/diensten vanuit EU aan u", 0, 0],
+      ["4b","Diensten van buiten de EU aan u", 0, 0],
+      ["RUBRIEK 5 — Voorbelasting en saldo"],
+      ["5a","Totaal verschuldigde omzetbelasting (1 t/m 4)", "—", n2(r.verschuldigd)],
+      ["5b","Totaal voorbelasting (btw op inkopen en kosten)", "—", n2(r.voorbelasting)],
+      ["5g", (r.teBetalen>=0?"TE BETALEN aan Belastingdienst":"TE ONTVANGEN van Belastingdienst"), "", n2(Math.abs(r.teBetalen))],
+      [],
+      ["Let op: rubrieken 2, 3 en 4 staan op nul. Controleer of dat voor deze periode klopt."]
+    ];
+    var ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{wch:6},{wch:52},{wch:20},{wch:16}];
+    opmaak(ws, { titelBreedte:4, valutaKolommen:[2,3], vanafRij:5 });
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "BTW Aangifte");
+    var veilig = (adminNaam+" BTW-aangifte "+label+" "+BOEKJAAR).replace(/[^a-zA-Z0-9 ()-]/g,"").replace(/\s+/g,"_");
+    XLSX.writeFile(wb, veilig + ".xlsx", { cellStyles:true });
   }
 
   // ── Bovenmenu ────────────────────────────────────────────────────────────
