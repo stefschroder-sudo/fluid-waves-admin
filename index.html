@@ -97,6 +97,27 @@
     </div>
   </div>
 
+  <!-- ── Overzichtsstrook: omzet, kosten, BTW voor de gekozen periode ─────────── -->
+  <div id="fw-strook" style="display:flex; align-items:center; gap:0; background:var(--navy); border-bottom:1px solid rgba(201,162,39,.35);">
+    <div id="fw-strook-inhoud" style="display:flex; flex:1; gap:0;">
+      <div style="flex:1; padding:9px 20px; border-right:1px solid rgba(255,255,255,.10);">
+        <div style="font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--goud); font-weight:600; margin-bottom:2px;">Omzet excl. btw</div>
+        <div id="fw-str-omzet" style="font-size:15px; font-weight:700; color:#FFFFFF;">€ 0,00</div>
+      </div>
+      <div style="flex:1; padding:9px 20px; border-right:1px solid rgba(255,255,255,.10);">
+        <div style="font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--goud); font-weight:600; margin-bottom:2px;">Kosten excl. btw</div>
+        <div id="fw-str-kosten" style="font-size:15px; font-weight:700; color:#FFFFFF;">€ 0,00</div>
+      </div>
+      <div style="flex:1; padding:9px 20px;">
+        <div id="fw-str-btw-label" style="font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--goud); font-weight:600; margin-bottom:2px;">Btw te betalen</div>
+        <div id="fw-str-btw" style="font-size:15px; font-weight:700; color:#FFFFFF;">€ 0,00</div>
+      </div>
+    </div>
+    <button id="fw-strook-toggle" title="Overzicht tonen of verbergen" style="background:none; border:none; color:rgba(255,255,255,.6); cursor:pointer; padding:9px 16px; align-self:stretch;">
+      <svg id="fw-strook-oog" class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:16px;"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+  </div>
+
   <!-- ── Bovenmenu ─────────────────────────────────────────────────────────── -->
   <div id="fw-topmenu" style="display:flex; gap:2px; background:var(--papier); padding:0 20px; border-bottom:1px solid var(--rand); flex-wrap:wrap;">
     <div class="fw-top actief" data-view="invoeren" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16zM13.5 6.5l4 4M16 19h6M19 16v6"/></svg>Invoeren</div>
@@ -417,6 +438,37 @@
     });
   }
 
+  // ── Overzichtsstrook bijwerken ───────────────────────────────────────────
+  function euroStr(n){ return "€ " + (Number(n)||0).toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+  async function ververStrook(){
+    if(!curAdmin){
+      document.getElementById('fw-str-omzet').textContent = "€ 0,00";
+      document.getElementById('fw-str-kosten').textContent = "€ 0,00";
+      document.getElementById('fw-str-btw').textContent = "€ 0,00";
+      return;
+    }
+    // Alle soorten voor de actieve administratie ophalen en op periode filteren
+    var omzet  = (await laadBoekingen('omzet')).filter(function(r){ return inPeriode(r.datum); });
+    var inkoop = (await laadBoekingen('inkoop')).filter(function(r){ return inPeriode(r.datum); });
+    var kosten = (await laadBoekingen('kosten')).filter(function(r){ return inPeriode(r.datum); });
+
+    var omzetTot  = omzet.reduce(function(s,r){ return s + (Number(r.bedrag_excl)||0); }, 0);
+    var kostenTot = inkoop.concat(kosten).reduce(function(s,r){ return s + (Number(r.bedrag_excl)||0); }, 0);
+
+    // BTW-saldo: verschuldigd over omzet minus voorbelasting over inkoop + kosten
+    var btwVerschuldigd = omzet.reduce(function(s,r){ return s + (Number(r.btw_bedrag)||0); }, 0);
+    var btwVoorbelasting = inkoop.concat(kosten).reduce(function(s,r){ return s + (Number(r.btw_bedrag)||0); }, 0);
+    // Saldo dat je (nog) zou moeten afdragen. Straks komt hier de reeds
+    // aangegeven/betaalde BTW vanaf (vraag 2) — dan wordt dit "nog te betalen".
+    var btwSaldo = btwVerschuldigd - btwVoorbelasting;
+
+    document.getElementById('fw-str-omzet').textContent  = euroStr(omzetTot);
+    document.getElementById('fw-str-kosten').textContent = euroStr(kostenTot);
+    document.getElementById('fw-str-btw').textContent    = euroStr(Math.abs(btwSaldo));
+    document.getElementById('fw-str-btw-label').textContent = btwSaldo >= 0 ? "Btw te betalen" : "Btw te ontvangen";
+  }
+
   // ── Rechterscherm ────────────────────────────────────────────────────────
   var titelEl = document.getElementById('fw-titel');
   var subEl = document.getElementById('fw-subtitel');
@@ -677,6 +729,7 @@
     subEl.textContent = (admins[curAdmin] ? admins[curAdmin].naam : '') + " · boekjaar 2026 · " + v.titel;
     actieEl.style.display = "none";   // actieknop zit nu in het scherm zelf
 
+    ververStrook();   // overzichtsstrook meebewegen met periode/administratie/wijzigingen
     // Nog geen administratie? Toon een nette aanmaakknop i.p.v. de database in te gaan.
     if(!curAdmin){
       schermEl.innerHTML =
@@ -761,6 +814,18 @@
     if(periode.type==="maand") periode.maand = v; else periode.kwartaal = v;
     await renderScherm();
   };
+
+  // Overzichtsstrook tonen/verbergen
+  (function(){
+    var strookOpen = true;
+    document.getElementById('fw-strook-toggle').onclick = function(){
+      strookOpen = !strookOpen;
+      document.getElementById('fw-strook-inhoud').style.display = strookOpen ? "flex" : "none";
+      document.getElementById('fw-strook-oog').innerHTML = strookOpen
+        ? '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>'
+        : '<path d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2M9.9 5.1A9.5 9.5 0 0 1 12 5c7 0 11 7 11 7a17 17 0 0 1-3.3 4M6.6 6.6A17 17 0 0 0 1 12s4 7 11 7a9.5 9.5 0 0 0 2.1-.2"/>';
+    };
+  })();
 
   // ── Start ────────────────────────────────────────────────────────────────
   (async function(){
