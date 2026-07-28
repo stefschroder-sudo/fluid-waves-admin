@@ -174,13 +174,23 @@
   var SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzdnF5YmNmaHZscmJuaG11ZXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMzIxOTQsImV4cCI6MjA5ODgwODE5NH0.7I7hktMKe6rF3ZDgM7LMKyO_Pkww6fcBULdO-8BsudY";
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
     auth: {
-      persistSession: true,          // sessie in localStorage bewaren
-      autoRefreshToken: true,        // token automatisch verversen
-      detectSessionInUrl: true,
-      storage: window.localStorage,
-      storageKey: 'fw-admin-auth'    // eigen sleutel, los van andere apps op dit project
+      persistSession: true,
+      autoRefreshToken: true,
+      storageKey: 'fw-admin-auth'
     }
   });
+  // Token dat we bij de login in handen krijgen, houden we zelf vast — los van
+  // localStorage, dat in deze omgeving de sessie niet betrouwbaar bewaart.
+  // Elke database-client die we daarna maken, krijgt dit token in de header,
+  // zodat auth.uid() gevuld is en RLS de rijen accepteert.
+  var ACCESS_TOKEN = null;
+  function dbClient(){
+    if(!ACCESS_TOKEN) return sb;
+    return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: "Bearer " + ACCESS_TOKEN } }
+    });
+  }
 
   // ── State ────────────────────────────────────────────────────────────────
   var admins = {};          // { id: {naam, ini, sub} }
@@ -203,13 +213,11 @@
     var r = await sb.auth.signInWithPassword({ email: email, password: pass });
     loginBtn.textContent = "Inloggen"; loginBtn.disabled = false;
     if(r.error){ toonFout("Inloggen mislukt: " + r.error.message); return; }
-    // Zowel user als de volledige sessie bewaren; de sessie bevat het token
-    // dat Supabase nodig heeft om auth.uid() te vullen bij het schrijven.
     user = r.data.user;
-    if(r.data.session){
-      try { await sb.auth.setSession(r.data.session); } catch(e){ /* al gezet */ }
-    }
-    if(!user){ toonFout("Sessie niet geladen — probeer opnieuw."); return; }
+    // Het token dat we NU in handen hebben, zelf vasthouden. Niet meer aan de
+    // client-opslag overlaten, want die bewaart het in deze omgeving niet.
+    ACCESS_TOKEN = r.data.session ? r.data.session.access_token : null;
+    if(!user || !ACCESS_TOKEN){ toonFout("Sessie niet geladen — probeer opnieuw."); return; }
     await naBinnenkomst();
   }
   loginBtn.onclick = login;
@@ -229,7 +237,7 @@
 
   async function laadAdmins(){
     admins = {};
-    var r = await sb.from('adm_administraties').select('*').order('aangemaakt');
+    var r = await dbClient().from('adm_administraties').select('*').order('aangemaakt');
     if(r.error){
       alert("Kon administraties niet laden: " + r.error.message);
       return;
@@ -246,21 +254,14 @@
   }
 
   async function nieuweAdmin(naam){
-    // Probeer de verse gebruiker; val terug op de bij login bewaarde user.
-    var uid = null;
-    try {
-      var u = await sb.auth.getUser();
-      if(u.data && u.data.user){ uid = u.data.user.id; user = u.data.user; }
-    } catch(e){ /* negeren, terugval hieronder */ }
-    if(!uid && user){ uid = user.id; }
-    if(!uid){
+    if(!user || !ACCESS_TOKEN){
       alert("Je sessie is verlopen. Log opnieuw in.");
       loginEl.style.display = "flex";
       root.style.display = "none";
       return false;
     }
-    var r = await sb.from('adm_administraties')
-      .insert({ user_id:uid, naam:naam })
+    var r = await dbClient().from('adm_administraties')
+      .insert({ user_id:user.id, naam:naam })
       .select().single();
     if(r.error){ alert("Aanmaken mislukt: "+r.error.message); return false; }
     admins[r.data.id] = { naam:naam, ini:initialen(naam), sub:"nieuwe administratie" };
@@ -431,7 +432,7 @@
   // Boekingen van de actieve administratie + soort laden
   async function laadBoekingen(soort){
     if(!curAdmin) return [];   // geen administratie geselecteerd → niets te laden
-    var r = await sb.from('adm_boekingen')
+    var r = await dbClient().from('adm_boekingen')
       .select('*')
       .eq('administratie_id', curAdmin)
       .eq('soort', soort)
@@ -443,19 +444,19 @@
   async function bewaarBoeking(rec){
     rec.user_id = user.id;
     rec.administratie_id = curAdmin;
-    var r = await sb.from('adm_boekingen').insert(rec).select().single();
+    var r = await dbClient().from('adm_boekingen').insert(rec).select().single();
     if(r.error){ alert("Opslaan mislukt: "+r.error.message); return null; }
     return r.data;
   }
 
   async function wijzigBoeking(id, rec){
-    var r = await sb.from('adm_boekingen').update(rec).eq('id', id).select().single();
+    var r = await dbClient().from('adm_boekingen').update(rec).eq('id', id).select().single();
     if(r.error){ alert("Bijwerken mislukt: "+r.error.message); return null; }
     return r.data;
   }
 
   async function verwijderBoeking(id){
-    var r = await sb.from('adm_boekingen').delete().eq('id', id);
+    var r = await dbClient().from('adm_boekingen').delete().eq('id', id);
     if(r.error){ alert("Verwijderen mislukt: "+r.error.message); }
   }
 
@@ -465,12 +466,12 @@
   async function uploadBestand(file){
     var veilig = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     var pad = user.id + "/" + curAdmin + "/" + Date.now() + "_" + veilig;
-    var r = await sb.storage.from('adm-bestanden').upload(pad, file);
+    var r = await dbClient().storage.from('adm-bestanden').upload(pad, file);
     if(r.error){ alert("Upload mislukt: " + r.error.message); return false; }
     return pad;
   }
   async function openBestand(pad){
-    var r = await sb.storage.from('adm-bestanden').createSignedUrl(pad, 60);
+    var r = await dbClient().storage.from('adm-bestanden').createSignedUrl(pad, 60);
     if(r.error){ alert("Openen mislukt: " + r.error.message); return; }
     window.open(r.data.signedUrl, "_blank");
   }
@@ -761,14 +762,19 @@
     await renderScherm();
   };
 
-  // ── Start: bestaande sessie? dan direct door ─────────────────────────────
+  // ── Start ────────────────────────────────────────────────────────────────
   (async function(){
     vulPeriodeKeuze();
-    var r = await sb.auth.getSession();
-    if(r.data && r.data.session){
-      user = r.data.session.user;
-      await naBinnenkomst();
-    }
+    // Mocht de client tóch een sessie hebben bewaard, gebruik hem; anders
+    // blijft het inlogscherm staan (het token krijgen we dan vers bij de login).
+    try {
+      var r = await sb.auth.getSession();
+      if(r.data && r.data.session){
+        user = r.data.session.user;
+        ACCESS_TOKEN = r.data.session.access_token;
+        await naBinnenkomst();
+      }
+    } catch(e){ /* geen sessie — inlogscherm blijft */ }
   })();
 })();
 </script>
