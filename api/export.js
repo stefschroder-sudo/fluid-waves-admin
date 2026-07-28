@@ -29,6 +29,8 @@ export default async function handler(req, res) {
 
     if (b.modus === "aangifte") {
       aangifteBlad(wb, b);
+    } else if (b.modus === "resultaat") {
+      resultaatBlad(wb, b);
     } else {
       aangifteBlad(wb, b);
       omzetBlad(wb, b);
@@ -133,6 +135,31 @@ function aangifteBlad(wb, b) {
   dataRij(ws, ["5g", (a.teBetalen >= 0 ? "TE BETALEN aan Belastingdienst" : "TE ONTVANGEN van Belastingdienst"), "", n(Math.abs(a.teBetalen))], [4], { vet: true, totaal: true });
   ws.addRow([]);
   subBalk(ws, "Let op: rubrieken 2, 3 en 4 staan op nul. De app boekt nu geen verlegging, export of buitenlandse inkoop. Controleer of dat voor deze periode klopt.", 4);
+}
+
+// ── Tabblad: Resultaat (winst- en verliesrekening) ─────────────────────────
+function resultaatBlad(wb, b) {
+  const ws = wb.addWorksheet("Resultaat", { views: [{ showGridLines: false }] });
+  ws.columns = [{ width: 6 }, { width: 46 }, { width: 20 }];
+  const r = b.resultaat || {};
+  const n = function (v) { return Math.round((Number(v) || 0) * 100) / 100; };
+  const winst = (Number(r.resultaat) || 0) >= 0;
+
+  titelBalk(ws, "Winst- en verliesrekening — " + (b.periodeLabel || ""), 3);
+  subBalk(ws, (b.adminNaam || "") + (b.adminSub ? "   |   " + b.adminSub : "") + "   |   Alle bedragen exclusief btw   |   Aangemaakt: " + new Date().toLocaleDateString("nl-NL"), 3);
+  ws.addRow([]);
+  kopRij(ws, ["", "Omschrijving", "Bedrag"], [3]);
+
+  dataRij(ws, ["", "Omzet", n(r.omzet)], [3], { vet: true });
+  sectieRij(ws, "Kosten", 3);
+  dataRij(ws, ["", "Inkoop", n(r.inkoop)], [3]);
+  dataRij(ws, ["", "Overige kosten", n(r.kosten)], [3]);
+  dataRij(ws, ["", "Loonkosten", n(r.loon)], [3]);
+  dataRij(ws, ["", "Totale kosten", n(r.totaalKosten)], [3], { vet: true });
+  dataRij(ws, ["", (winst ? "RESULTAAT (winst)" : "RESULTAAT (verlies)"), n(Math.abs(r.resultaat))], [3], { vet: true, totaal: true });
+
+  ws.addRow([]);
+  subBalk(ws, "Dit is het bedrijfsresultaat vóór belasting en vóór ondernemersaftrekken (zelfstandigenaftrek, MKB-winstvrijstelling). Die worden pas bij de IB-aangifte verrekend.", 3);
 }
 
 // ── Tabblad: Omzet Detail ──────────────────────────────────────────────────
