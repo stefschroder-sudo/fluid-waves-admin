@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Fluid Waves — Administratie</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --navy:#1B2C4F; --navy-licht:#2D4A7F; --goud:#C9A227; --goud-licht:#E0BE4A;
@@ -629,6 +630,120 @@
     };
   }
 
+  // ── Export naar Excel (vier tabbladen, voor de gekozen periode) ──────────
+  function periodeInfo(){
+    if(periode.type === "maand"){
+      return { label: MAANDEN[periode.maand-1]+" "+BOEKJAAR, maanden:[periode.maand] };
+    }
+    if(periode.type === "kwartaal"){
+      var m = [ (periode.kwartaal-1)*3+1, (periode.kwartaal-1)*3+2, (periode.kwartaal-1)*3+3 ];
+      return { label: "Q"+periode.kwartaal+" ("+["jan-mrt","apr-jun","jul-sep","okt-dec"][periode.kwartaal-1]+") "+BOEKJAAR, maanden:m };
+    }
+    return { label:"Heel "+BOEKJAAR, maanden:[1,2,3,4,5,6,7,8,9,10,11,12] };
+  }
+
+  async function exporteerExcel(){
+    if(!curAdmin){ await fwMelding("Kies eerst een administratie."); return; }
+    var info = periodeInfo();
+    function inSel(d){ if(!d) return false; var dt=new Date(d); return dt.getFullYear()===BOEKJAAR && info.maanden.indexOf(dt.getMonth()+1)>=0; }
+    function dop(a,b){ return (a.datum||"").localeCompare(b.datum||""); }
+
+    var omzet  = (await laadBoekingen('omzet')).filter(function(r){ return inSel(r.datum); }).sort(dop);
+    var inkoop = (await laadBoekingen('inkoop')).filter(function(r){ return inSel(r.datum); }).sort(dop);
+    var kosten = (await laadBoekingen('kosten')).filter(function(r){ return inSel(r.datum); }).sort(dop);
+
+    var adminNaam = admins[curAdmin] ? admins[curAdmin].naam : "Administratie";
+    var wb = XLSX.utils.book_new();
+    var n2 = function(v){ return Math.round((Number(v)||0)*100)/100; };
+
+    // Tabblad 1: BTW Aangifte
+    var type = ritmeVan();
+    var nummer = (periode.type === "maand") ? periode.maand
+               : (periode.type === "kwartaal") ? periode.kwartaal : 1;
+    var rub;
+    if(periode.type === "jaar"){
+      rub = { r1a:{excl:0,btw:0}, r1b:{excl:0,btw:0}, r1c:{excl:0,btw:0}, r1e:{excl:0,btw:0}, verschuldigd:0, voorbelasting:0, teBetalen:0 };
+      for(var q=1;q<=4;q++){
+        var deel = await aangifteRubrieken(BOEKJAAR, "kwartaal", q);
+        ["r1a","r1b","r1c","r1e"].forEach(function(k){ rub[k].excl+=deel[k].excl; rub[k].btw+=deel[k].btw; });
+        rub.verschuldigd+=deel.verschuldigd; rub.voorbelasting+=deel.voorbelasting; rub.teBetalen+=deel.teBetalen;
+      }
+    } else {
+      rub = await aangifteRubrieken(BOEKJAAR, type, nummer);
+    }
+    var aangifteData = [
+      ["BTW-AANGIFTE OMZETBELASTING — "+info.label],
+      [adminNaam+(admins[curAdmin]&&admins[curAdmin].sub?"   |   "+admins[curAdmin].sub:"")+"   |   Aangemaakt: "+new Date().toLocaleDateString('nl-NL')],
+      [],
+      ["Nr.","Omschrijving","Grondslag (excl. btw)","Btw-bedrag"],
+      ["RUBRIEK 1 — Prestaties binnenland"],
+      ["1a","Leveringen/diensten belast met hoog tarief (21%)", n2(rub.r1a.excl), n2(rub.r1a.btw)],
+      ["1b","Leveringen/diensten belast met laag tarief (9%)", n2(rub.r1b.excl), n2(rub.r1b.btw)],
+      ["1c","Leveringen/diensten belast met overige tarieven", n2(rub.r1c.excl), n2(rub.r1c.btw)],
+      ["1e","Leveringen/diensten belast met 0% (export)", n2(rub.r1e.excl), 0],
+      ["RUBRIEK 2 — Verleggingsregelingen binnenland"],
+      ["2a","Heffing naar u verlegd", 0, 0],
+      ["RUBRIEK 3 — Prestaties naar/in het buitenland"],
+      ["3a","Leveringen buiten de EU (export, 0%)", "n.v.t.", "n.v.t."],
+      ["3b","Leveringen naar/in EU-landen", "n.v.t.", "n.v.t."],
+      ["RUBRIEK 4 — Prestaties vanuit het buitenland aan u"],
+      ["4a","Leveringen/diensten vanuit EU aan u", 0, 0],
+      ["4b","Diensten van buiten de EU aan u", 0, 0],
+      ["RUBRIEK 5 — Voorbelasting en saldo"],
+      ["5a","Totaal verschuldigde omzetbelasting (1 t/m 4)", "—", n2(rub.verschuldigd)],
+      ["5b","Totaal voorbelasting (btw op inkopen en kosten)", "—", n2(rub.voorbelasting)],
+      ["5g", (rub.teBetalen>=0?"TE BETALEN aan Belastingdienst":"TE ONTVANGEN van Belastingdienst"), "", n2(Math.abs(rub.teBetalen))],
+      [],
+      ["Let op: rubrieken 2, 3 en 4 staan op nul. De app boekt nu geen verlegging, export of buitenlandse inkoop. Controleer of dat voor deze periode klopt."]
+    ];
+    var wsA = XLSX.utils.aoa_to_sheet(aangifteData);
+    wsA['!cols'] = [{wch:6},{wch:52},{wch:20},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, wsA, "BTW Aangifte");
+
+    // Tabblad 2: Omzet Detail
+    var omzetData = [["OMZET DETAIL — "+info.label], ["Datum","Klant","Omschrijving","Excl. btw","Btw %","Btw-bedrag","Incl. btw"]];
+    omzet.forEach(function(r){ omzetData.push([r.datum||"", r.naam||"", r.omschrijving||"", n2(r.bedrag_excl), (r.btw_pct||0)+"%", n2(r.btw_bedrag), n2(r.bedrag_incl)]); });
+    omzetData.push([]);
+    omzetData.push(["","","TOTAAL", n2(omzet.reduce(function(s,r){return s+(Number(r.bedrag_excl)||0);},0)), "", n2(omzet.reduce(function(s,r){return s+(Number(r.btw_bedrag)||0);},0)), n2(omzet.reduce(function(s,r){return s+(Number(r.bedrag_incl)||0);},0))]);
+    var wsO = XLSX.utils.aoa_to_sheet(omzetData);
+    wsO['!cols'] = [{wch:12},{wch:28},{wch:44},{wch:14},{wch:8},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, wsO, "Omzet Detail");
+
+    // Tabblad 3: Inkoop en Kosten
+    var ikData = [["INKOOP & KOSTEN DETAIL — "+info.label], ["Datum","Leverancier","Soort","Omschrijving","Excl. btw","Btw op factuur","Incl. btw"]];
+    inkoop.concat(kosten).sort(dop).forEach(function(r){
+      ikData.push([r.datum||"", r.naam||"", (r.soort==="inkoop"?"Inkoopfactuur":"Kosten"), r.omschrijving||"", n2(r.bedrag_excl), n2(r.btw_bedrag), n2(r.bedrag_incl)]);
+    });
+    ikData.push([]);
+    var alleUit = inkoop.concat(kosten);
+    ikData.push(["","","","TOTAAL", n2(alleUit.reduce(function(s,r){return s+(Number(r.bedrag_excl)||0);},0)), n2(alleUit.reduce(function(s,r){return s+(Number(r.btw_bedrag)||0);},0)), n2(alleUit.reduce(function(s,r){return s+(Number(r.bedrag_incl)||0);},0))]);
+    var wsIK = XLSX.utils.aoa_to_sheet(ikData);
+    wsIK['!cols'] = [{wch:12},{wch:34},{wch:14},{wch:40},{wch:14},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, wsIK, "Inkoop en Kosten");
+
+    // Tabblad 4: Herkomst per bestand
+    var hData = [["INKOMSTEN & UITGAVEN PER BESTAND — "+info.label],
+                 ["Bronbestand toont het geüploade document; handmatige regels zijn als zodanig gemarkeerd."], []];
+    function blok(titel, rows){
+      hData.push([titel]);
+      hData.push(["Datum","Naam","Bronbestand","Omschrijving","Excl. btw","Btw","Incl. btw"]);
+      rows.forEach(function(r){
+        var bron = r.bestand_pad ? (r.bron||"bestand") : "handmatig ingevoerd";
+        hData.push([r.datum||"", r.naam||"", bron, r.omschrijving||"", n2(r.bedrag_excl), n2(r.btw_bedrag), n2(r.bedrag_incl)]);
+      });
+      hData.push([]);
+    }
+    blok("INKOMSTEN — Omzet", omzet);
+    blok("UITGAVEN — Inkoopfacturen", inkoop);
+    blok("UITGAVEN — Overige kosten", kosten);
+    var wsH = XLSX.utils.aoa_to_sheet(hData);
+    wsH['!cols'] = [{wch:12},{wch:30},{wch:40},{wch:40},{wch:12},{wch:12},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, wsH, "Herkomst per bestand");
+
+    var veiligeNaam = (adminNaam+" BTW "+info.label).replace(/[^a-zA-Z0-9 ()-]/g,"").replace(/\s+/g,"_");
+    XLSX.writeFile(wb, veiligeNaam + ".xlsx");
+  }
+
   // ── Rechterscherm ────────────────────────────────────────────────────────
   var titelEl = document.getElementById('fw-titel');
   var subEl = document.getElementById('fw-subtitel');
@@ -1069,6 +1184,11 @@
       return;
     }
 
+    if(curView === "dashboard"){
+      await schermDashboard();
+      return;
+    }
+
     // Overige schermen: nog leeg
     schermEl.innerHTML =
       '<div class="fw-leeg">'+
@@ -1076,6 +1196,46 @@
         '<div style="font-size:13px; color:var(--inkt); font-weight:600; margin-bottom:3px;">'+it.label+'</div>'+
         '<div style="font-size:12px;">Dit scherm is nog leeg. Omzet werkt al — de rest bouwen we in dezelfde stijl.</div>'+
       '</div>';
+  }
+
+  // ── Dashboard-scherm ──────────────────────────────────────────────────────
+  async function schermDashboard(){
+    var info = periodeInfo();
+    function inSel(d){ if(!d) return false; var dt=new Date(d); return dt.getFullYear()===BOEKJAAR && info.maanden.indexOf(dt.getMonth()+1)>=0; }
+    var omzet  = (await laadBoekingen('omzet')).filter(function(r){ return inSel(r.datum); });
+    var inkoop = (await laadBoekingen('inkoop')).filter(function(r){ return inSel(r.datum); });
+    var kosten = (await laadBoekingen('kosten')).filter(function(r){ return inSel(r.datum); });
+    var omzetTot = omzet.reduce(function(s,r){return s+(Number(r.bedrag_excl)||0);},0);
+    var kostenTot = inkoop.concat(kosten).reduce(function(s,r){return s+(Number(r.bedrag_excl)||0);},0);
+    var aantal = omzet.length + inkoop.length + kosten.length;
+
+    schermEl.innerHTML =
+      '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:18px;">'+
+        kpi("Omzet · "+info.label, euroStr(omzetTot))+
+        kpi("Kosten · "+info.label, euroStr(kostenTot))+
+        kpi("Resultaat", euroStr(omzetTot-kostenTot))+
+      '</div>'+
+      '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px;">'+
+        '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:4px;">Exporteren</div>'+
+        '<div style="font-size:12px; color:var(--grijs); margin-bottom:14px;">Genereert een Excel-bestand met vier tabbladen — btw-aangifte, omzet, inkoop en kosten, en herkomst per bestand — voor de nu gekozen periode ('+info.label+'). '+aantal+' regel'+(aantal!==1?'s':'')+' in beeld.</div>'+
+        '<button id="dash-export" style="display:inline-flex; align-items:center; gap:8px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 16px; cursor:pointer;">'+
+          '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'+
+          'Exporteer '+info.label+' naar Excel'+
+        '</button>'+
+      '</div>';
+
+    document.getElementById('dash-export').onclick = async function(){
+      this.textContent = "Bezig…"; this.disabled = true;
+      try { await exporteerExcel(); }
+      catch(e){ await fwMelding("Export mislukt: " + (e.message||e)); }
+      await renderScherm();
+    };
+  }
+  function kpi(label, waarde){
+    return '<div style="background:var(--navy); border-radius:10px; padding:14px 16px;">'+
+      '<div style="font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--goud); margin-bottom:5px;">'+label+'</div>'+
+      '<div style="font-size:20px; font-weight:700; color:var(--papier);">'+waarde+'</div>'+
+    '</div>';
   }
 
   // ── BTW-scherm ────────────────────────────────────────────────────────────
