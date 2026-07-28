@@ -698,6 +698,7 @@
     ];
     var wsA = XLSX.utils.aoa_to_sheet(aangifteData);
     wsA['!cols'] = [{wch:6},{wch:52},{wch:20},{wch:16}];
+    opmaak(wsA, { titelBreedte:4, valutaKolommen:[2,3], vanafRij:5 });
     XLSX.utils.book_append_sheet(wb, wsA, "BTW Aangifte");
 
     // Tabblad 2: Omzet Detail
@@ -707,6 +708,7 @@
     omzetData.push(["","","TOTAAL", n2(omzet.reduce(function(s,r){return s+(Number(r.bedrag_excl)||0);},0)), "", n2(omzet.reduce(function(s,r){return s+(Number(r.btw_bedrag)||0);},0)), n2(omzet.reduce(function(s,r){return s+(Number(r.bedrag_incl)||0);},0))]);
     var wsO = XLSX.utils.aoa_to_sheet(omzetData);
     wsO['!cols'] = [{wch:12},{wch:28},{wch:44},{wch:14},{wch:8},{wch:14},{wch:14}];
+    opmaak(wsO, { titelBreedte:7, valutaKolommen:[3,5,6], vanafRij:2 });
     XLSX.utils.book_append_sheet(wb, wsO, "Omzet Detail");
 
     // Tabblad 3: Inkoop en Kosten
@@ -719,6 +721,7 @@
     ikData.push(["","","","TOTAAL", n2(alleUit.reduce(function(s,r){return s+(Number(r.bedrag_excl)||0);},0)), n2(alleUit.reduce(function(s,r){return s+(Number(r.btw_bedrag)||0);},0)), n2(alleUit.reduce(function(s,r){return s+(Number(r.bedrag_incl)||0);},0))]);
     var wsIK = XLSX.utils.aoa_to_sheet(ikData);
     wsIK['!cols'] = [{wch:12},{wch:34},{wch:14},{wch:40},{wch:14},{wch:14},{wch:14}];
+    opmaak(wsIK, { titelBreedte:7, valutaKolommen:[4,5,6], vanafRij:2 });
     XLSX.utils.book_append_sheet(wb, wsIK, "Inkoop en Kosten");
 
     // Tabblad 4: Herkomst per bestand
@@ -738,10 +741,32 @@
     blok("UITGAVEN — Overige kosten", kosten);
     var wsH = XLSX.utils.aoa_to_sheet(hData);
     wsH['!cols'] = [{wch:12},{wch:30},{wch:40},{wch:40},{wch:12},{wch:12},{wch:12}];
+    opmaak(wsH, { titelBreedte:7, valutaKolommen:[4,5,6], vanafRij:3 });
     XLSX.utils.book_append_sheet(wb, wsH, "Herkomst per bestand");
 
     var veiligeNaam = (adminNaam+" BTW "+info.label).replace(/[^a-zA-Z0-9 ()-]/g,"").replace(/\s+/g,"_");
-    XLSX.writeFile(wb, veiligeNaam + ".xlsx");
+    XLSX.writeFile(wb, veiligeNaam + ".xlsx", { cellStyles:true });
+  }
+
+  // Opmaak-helper: valutaformaat op bedragkolommen, titelrij samenvoegen,
+  // en rijhoogte voor de titel. Werkt met de gratis SheetJS (getalformaat + merges).
+  function opmaak(ws, opts){
+    var range = XLSX.utils.decode_range(ws['!ref']);
+    // Titelrij (rij 0) samenvoegen over de volle breedte
+    ws['!merges'] = ws['!merges'] || [];
+    ws['!merges'].push({ s:{r:0,c:0}, e:{r:0,c:(opts.titelBreedte-1)} });
+    // Valutaformaat op de opgegeven kolommen, vanaf de datarij
+    var valutaFmt = '€ #,##0.00;[RED]-€ #,##0.00';
+    for(var R=(opts.vanafRij||1); R<=range.e.r; R++){
+      (opts.valutaKolommen||[]).forEach(function(C){
+        var adres = XLSX.utils.encode_cell({r:R, c:C});
+        var cel = ws[adres];
+        if(cel && typeof cel.v === 'number'){ cel.t = 'n'; cel.z = valutaFmt; }
+      });
+    }
+    // Wat rijhoogte voor de titel
+    ws['!rows'] = ws['!rows'] || [];
+    ws['!rows'][0] = { hpt: 20 };
   }
 
   // ── Rechterscherm ────────────────────────────────────────────────────────
