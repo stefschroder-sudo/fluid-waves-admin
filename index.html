@@ -828,10 +828,12 @@
       return "image/jpeg";
     }
 
-    // Bij binnenkomst van het scherm: als er nog een wachtrij liep, balk tonen
+    // Bij (her)opbouw van het scherm: is er nog een factuur in de wachtrij,
+    // toon dan de balk én lees die factuur meteen in.
     if(factuurWachtrij.length && factuurIndex < factuurWachtrij.length){
       gekozenBestand = factuurWachtrij[factuurIndex];
       toonWachtrijBalk();
+      herkenFactuur();   // ← dit ontbrak: de volgende factuur werd niet gelezen
     }
 
     var annBtn = document.getElementById('o-annuleer');
@@ -868,13 +870,15 @@
       else { ok = await bewaarBoeking(rec); }
 
       if(ok){
-        // In een wachtrij? Dan door naar de volgende factuur, zonder het scherm te verliezen.
+        // In een wachtrij? Ga naar de volgende factuur.
         if(factuurWachtrij.length && factuurIndex < factuurWachtrij.length){
           factuurIndex++;
-          await renderScherm();   // herbouwt het scherm; de wachtrij-check pakt de volgende op
-        } else {
-          await renderScherm();
+          if(factuurIndex >= factuurWachtrij.length){
+            // Laatste factuur verwerkt — wachtrij afsluiten.
+            factuurWachtrij = []; factuurIndex = 0;
+          }
         }
+        await renderScherm();   // herbouwt het scherm; de wachtrij-check leest de volgende in
       } else {
         this.textContent = bewerken?"Bijwerken":"Opslaan"; this.disabled=false;
       }
