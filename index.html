@@ -205,12 +205,18 @@
   // Elke database-client die we daarna maken, krijgt dit token in de header,
   // zodat auth.uid() gevuld is en RLS de rijen accepteert.
   var ACCESS_TOKEN = null;
+  var _dbClient = null;         // gecachete client
+  var _dbClientToken = null;    // token waarvoor de cache geldt
   function dbClient(){
     if(!ACCESS_TOKEN) return sb;
-    return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    // Alleen een nieuwe client maken als het token is veranderd; anders hergebruiken.
+    if(_dbClient && _dbClientToken === ACCESS_TOKEN) return _dbClient;
+    _dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: "Bearer " + ACCESS_TOKEN } }
     });
+    _dbClientToken = ACCESS_TOKEN;
+    return _dbClient;
   }
 
   // ── State ────────────────────────────────────────────────────────────────
