@@ -80,10 +80,6 @@
       </div>
     </div>
     <div style="display:flex; align-items:center; gap:16px;">
-      <div style="display:flex; align-items:center; gap:6px; color:#C7CEDA; font-size:12px;">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>
-        <span>Boekjaar <b id="fw-jaar" style="color:#FFFFFF;">2026</b></span>
-      </div>
       <div id="fw-periode" style="display:flex; align-items:center; gap:0; border:1px solid rgba(255,255,255,.28); border-radius:8px; overflow:hidden;">
         <button class="fw-per" data-per="maand" style="border:none; background:transparent; color:#C7CEDA; font-size:11.5px; padding:6px 11px; cursor:pointer;">Maand</button>
         <button class="fw-per" data-per="kwartaal" style="border:none; border-left:1px solid rgba(255,255,255,.28); background:var(--goud); color:var(--navy); font-size:11.5px; padding:6px 11px; cursor:pointer; font-weight:600;">Kwartaal</button>
@@ -332,13 +328,11 @@
 
   // De ingelogde gebruiker tonen rechtsboven (naam uit metadata, anders e-mail)
   function toonGebruiker(){
-    if(!user) return;
-    var naam = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.naam)) || user.email || "";
-    var ini = naam ? naam.trim().split(/[\s@.]+/).filter(Boolean).slice(0,2).map(function(w){return w[0];}).join("").toUpperCase() : "·";
     var naamEl = document.getElementById('fw-user-naam');
     var iniEl = document.getElementById('fw-user-ini');
-    if(naamEl) naamEl.textContent = naam;
-    if(iniEl) iniEl.textContent = ini || "·";
+    var a = admins[curAdmin];
+    if(naamEl) naamEl.textContent = a ? a.naam : "";
+    if(iniEl) iniEl.textContent = a ? a.ini : "·";
   }
 
   // ── Administraties uit de database ───────────────────────────────────────
@@ -660,6 +654,7 @@
     document.getElementById('fw-sel-org').textContent = a.naam;
     document.getElementById('fw-sel-sub').textContent = a.sub;
     document.getElementById('fw-sel-ini').textContent = a.ini;
+    toonGebruiker();
   }
   function openPanel(){ panel.style.display="block"; chev.style.transform="rotate(180deg)"; btn.setAttribute('aria-expanded','true'); renderAdmins(); }
   function closePanel(){ panel.style.display="none"; chev.style.transform="rotate(0deg)"; btn.setAttribute('aria-expanded','false'); }
@@ -1292,7 +1287,7 @@
     var v = views[curView];
     var it = huidigItem();
     titelEl.textContent = it.label;
-    subEl.textContent = (admins[curAdmin] ? admins[curAdmin].naam : '') + " · boekjaar 2026 · " + v.titel;
+    subEl.textContent = (admins[curAdmin] ? admins[curAdmin].naam : '') + " · boekjaar " + BOEKJAAR + " · " + v.titel;
     actieEl.style.display = "none";   // actieknop zit nu in het scherm zelf
 
     ververStrook();   // overzichtsstrook meebewegen met periode/administratie/wijzigingen
