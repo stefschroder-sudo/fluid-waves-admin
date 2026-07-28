@@ -456,31 +456,27 @@
     var omzetTot  = omzet.reduce(function(s,r){ return s + (Number(r.bedrag_excl)||0); }, 0);
     var kostenTot = inkoop.concat(kosten).reduce(function(s,r){ return s + (Number(r.bedrag_excl)||0); }, 0);
 
-    // BTW-saldo: verschuldigd over omzet minus voorbelasting over inkoop + kosten
-    var btwVerschuldigd = omzet.reduce(function(s,r){ return s + (Number(r.btw_bedrag)||0); }, 0);
-    var btwVoorbelasting = inkoop.concat(kosten).reduce(function(s,r){ return s + (Number(r.btw_bedrag)||0); }, 0);
-    var btwSaldo = btwVerschuldigd - btwVoorbelasting;
-
-    // Reeds betaalde kwartalen binnen de gekozen periode eraf halen, zodat de
-    // strook toont wat er nog écht openstaat.
-    var statusMap = await laadBtwStatus();
-    var betaaldeKwartalen = 0;
-    var kwartalenInPeriode =
-      periode.type === "maand"    ? [ Math.floor((periode.maand-1)/3)+1 ] :
-      periode.type === "kwartaal" ? [ periode.kwartaal ] :
-                                    [1,2,3,4];
-    for(var i=0;i<kwartalenInPeriode.length;i++){
-      var st = statusMap[BOEKJAAR + "-" + kwartalenInPeriode[i]];
-      if(st && st.status === "betaald" && st.bedrag != null){
-        betaaldeKwartalen += Number(st.bedrag) || 0;
-      }
-    }
-    var btwOpenstaand = btwSaldo - betaaldeKwartalen;
-
     document.getElementById('fw-str-omzet').textContent  = euroStr(omzetTot);
     document.getElementById('fw-str-kosten').textContent = euroStr(kostenTot);
-    document.getElementById('fw-str-btw').textContent    = euroStr(Math.abs(btwOpenstaand));
-    document.getElementById('fw-str-btw-label').textContent = btwOpenstaand >= 0 ? "Btw nog te betalen" : "Btw nog te ontvangen";
+
+    // ── BTW: altijd het openstaande JAARTOTAAL, ongeacht de gekozen periode ──
+    // Omzet en kosten bewegen mee met de periode; de btw-schuld is een
+    // totaalbeeld. We berekenen het saldo van alle vier de kwartalen en trekken
+    // de betaalde kwartalen eraf.
+    var statusMap = await laadBtwStatus();
+    var openstaand = 0;
+    for(var kw=1; kw<=4; kw++){
+      var saldoKw = await btwVanKwartaal(BOEKJAAR, kw);
+      var st = statusMap[BOEKJAAR + "-" + kw];
+      if(st && st.status === "betaald"){
+        // Betaald kwartaal telt niet meer mee in wat nog openstaat.
+        continue;
+      }
+      openstaand += saldoKw;
+    }
+    document.getElementById('fw-str-btw').textContent = euroStr(Math.abs(openstaand));
+    document.getElementById('fw-str-btw-label').textContent =
+      (openstaand >= 0 ? "Btw nog te betalen" : "Btw nog te ontvangen") + " · " + BOEKJAAR;
   }
 
   // ── BTW: status per kwartaal laden/opslaan ───────────────────────────────
