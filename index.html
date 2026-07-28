@@ -648,8 +648,16 @@
   }
 
   // Omzet-scherm: formulier + lijst
-  async function schermOmzet(){
-    var alle = await laadBoekingen('omzet');
+  // Configuratie per boekingssoort — labels en teksten verschillen, de rest is gelijk
+  var SOORT_CONFIG = {
+    omzet:  { titelEnk:"omzetregel",       partij:"Klant",      partijPlaceholder:"Naam klant",      lijstnaam:"Omzet",  leegtekst:"Geen omzet",           factuurwoord:"factuur" },
+    inkoop: { titelEnk:"inkoopfactuur",    partij:"Leverancier",partijPlaceholder:"Naam leverancier",lijstnaam:"Inkoop", leegtekst:"Geen inkoopfacturen",  factuurwoord:"inkoopfactuur" },
+    kosten: { titelEnk:"kostenregel",      partij:"Leverancier",partijPlaceholder:"Naam leverancier",lijstnaam:"Kosten", leegtekst:"Geen kosten",          factuurwoord:"bon of factuur" }
+  };
+
+  async function schermBoeking(soort){
+    var cfg = SOORT_CONFIG[soort];
+    var alle = await laadBoekingen(soort);
     var rows = alle.filter(function(r){ return inPeriode(r.datum); });
     var totaal = rows.reduce(function(s,r){ return s + (Number(r.bedrag_excl)||0); }, 0);
 
@@ -659,28 +667,27 @@
     var html =
       '<div style="background:var(--wit); border:1px solid '+(bewerken?'var(--goud)':'var(--rand-licht)')+'; border-radius:10px; padding:14px 16px; margin-bottom:16px;">'+
         '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">'+
-          '<div style="font-size:12px; font-weight:600; color:var(--navy);">'+(bewerken?'Omzetregel bewerken':'Nieuwe omzetregel')+'</div>'+
+          '<div style="font-size:12px; font-weight:600; color:var(--navy);">'+(bewerken?('Bewerken: '+cfg.titelEnk):('Nieuwe '+cfg.titelEnk))+'</div>'+
           (bewerken?'<button id="o-annuleer" style="background:none; border:none; color:var(--grijs); font-size:11.5px; cursor:pointer;">Annuleren</button>':'')+
         '</div>'+
         '<div style="display:grid; grid-template-columns:1.1fr 1.6fr 1fr 0.8fr auto; gap:8px; align-items:end;">'+
           veld("Datum", '<input id="o-datum" type="date" '+inputStijl()+'>')+
-          veld("Klant", '<input id="o-klant" type="text" placeholder="Naam klant" '+inputStijl()+'>')+
+          veld(cfg.partij, '<input id="o-klant" type="text" placeholder="'+cfg.partijPlaceholder+'" '+inputStijl()+'>')+
           veld("Bedrag excl.", '<input id="o-excl" type="number" step="0.01" placeholder="0,00" '+inputStijl()+'>')+
           veld("Btw %", '<select id="o-btw" '+inputStijl()+'><option value="21">21%</option><option value="9">9%</option><option value="0">0%</option></select>')+
           '<button id="o-opslaan" style="padding:9px 14px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">'+(bewerken?'Bijwerken':'Opslaan')+'</button>'+
         '</div>'+
         '<input id="o-oms" type="text" placeholder="Omschrijving (optioneel)" style="width:100%; margin-top:8px; padding:8px 10px; border:1px solid var(--rand); border-radius:8px; font-size:12.5px; background:#fff;">'+
-        // Upload-zone
         '<div id="o-drop" style="margin-top:10px; border:1.5px dashed var(--rand); border-radius:8px; padding:12px; text-align:center; cursor:pointer; background:#fff;">'+
           '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:18px; color:var(--goud);"><path d="M12 15V3M8 7l4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'+
-          '<span id="o-drop-tekst" style="font-size:11.5px; color:var(--grijs); margin-left:6px;">'+(huidige && huidige.bestand_pad ? 'Bewijsstuk aanwezig — kies een nieuw bestand om te vervangen' : 'Sleep een factuur hierheen of klik om te kiezen (pdf, jpg, png)')+'</span>'+
+          '<span id="o-drop-tekst" style="font-size:11.5px; color:var(--grijs); margin-left:6px;">'+(huidige && huidige.bestand_pad ? 'Bewijsstuk aanwezig — kies een nieuw bestand om te vervangen' : ('Sleep een '+cfg.factuurwoord+' hierheen of klik om te kiezen (pdf, jpg, png)'))+'</span>'+
           '<input id="o-file" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">'+
         '</div>'+
       '</div>';
 
     if(rows.length){
       html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">'+
-                '<div style="font-size:12px; font-weight:600; color:var(--navy);">Omzet · '+rows.length+' regel'+(rows.length!==1?'s':'')+' · '+periodeLabel()+'</div>'+
+                '<div style="font-size:12px; font-weight:600; color:var(--navy);">'+cfg.lijstnaam+' · '+rows.length+' regel'+(rows.length!==1?'s':'')+' · '+periodeLabel()+'</div>'+
                 '<div style="font-size:13px; font-weight:700; color:var(--navy);">'+eur(totaal)+' excl. btw</div>'+
               '</div>';
       html += '<div style="border:1px solid var(--rand-licht); border-radius:10px; overflow:hidden;">';
@@ -699,12 +706,11 @@
       html += '</div>';
     } else {
       html += '<div class="fw-leeg"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M3 17l6-6 4 4 8-8M17 7h4v4"/></svg>'+
-              '<div style="font-size:12px;">Geen omzet in '+periodeLabel()+'. Voeg hierboven een regel toe of kies een andere periode.</div></div>';
+              '<div style="font-size:12px;">'+cfg.leegtekst+' in '+periodeLabel()+'. Voeg hierboven een regel toe of kies een andere periode.</div></div>';
     }
 
     schermEl.innerHTML = html;
 
-    // Velden vullen: bij bewerken de bestaande waarden, anders datum = vandaag
     if(bewerken && huidige){
       document.getElementById('o-datum').value = huidige.datum || "";
       document.getElementById('o-klant').value = huidige.naam || "";
@@ -715,7 +721,6 @@
       document.getElementById('o-datum').value = new Date().toISOString().slice(0,10);
     }
 
-    // Upload-zone gedrag
     var drop = document.getElementById('o-drop');
     var fileInput = document.getElementById('o-file');
     var gekozenBestand = null;
@@ -726,7 +731,6 @@
     fileInput.onchange = function(){ if(fileInput.files[0]){ gekozenBestand=fileInput.files[0]; toonBestandsnaam(); herkenFactuur(); } };
     function toonBestandsnaam(){ document.getElementById('o-drop-tekst').textContent = gekozenBestand.name; }
 
-    // AI-herkenning: bestand naar /api/extract sturen en het formulier vullen
     async function herkenFactuur(){
       var tekstEl = document.getElementById('o-drop-tekst');
       tekstEl.textContent = "Factuur wordt gelezen…";
@@ -736,7 +740,7 @@
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            soort: "omzet",
+            soort: soort,
             media_type: gekozenBestand.type || raadType(gekozenBestand.name),
             data: base64
           })
@@ -774,7 +778,6 @@
       return "image/jpeg";
     }
 
-    // Annuleren van bewerkmodus
     var annBtn = document.getElementById('o-annuleer');
     if(annBtn){ annBtn.onclick = async function(){ bewerkId = null; await renderScherm(); }; }
 
@@ -785,7 +788,7 @@
       var btw = Math.round(excl * pct) / 100;
       this.textContent = "Bezig…"; this.disabled = true;
 
-      var pad = huidige ? huidige.bestand_pad : null;   // bestaand bewijsstuk behouden
+      var pad = huidige ? huidige.bestand_pad : null;
       if(gekozenBestand){
         var nieuwPad = await uploadBestand(gekozenBestand);
         if(nieuwPad === false){ this.textContent = bewerken?"Bijwerken":"Opslaan"; this.disabled=false; return; }
@@ -793,7 +796,7 @@
       }
 
       var rec = {
-        soort:'omzet',
+        soort: soort,
         datum: document.getElementById('o-datum').value || null,
         naam: document.getElementById('o-klant').value.trim(),
         omschrijving: document.getElementById('o-oms').value.trim(),
@@ -810,7 +813,6 @@
       if(ok) await renderScherm();
     };
 
-    // Klik op een regel → bewerken (maar niet als je op paperclip of prullenbak klikt)
     Array.prototype.forEach.call(schermEl.querySelectorAll('[data-edit]'), function(rij){
       rij.onclick = async function(e){
         if(e.target.closest('[data-del]') || e.target.closest('[data-bestand]')) return;
@@ -823,7 +825,7 @@
     Array.prototype.forEach.call(schermEl.querySelectorAll('[data-del]'), function(b){
       b.onclick = async function(e){
         e.stopPropagation();
-        if(!(await fwBevestig("Deze omzetregel verwijderen?", {okLabel:"Verwijderen"}))) return;
+        if(!(await fwBevestig("Deze regel verwijderen?", {okLabel:"Verwijderen"}))) return;
         await verwijderBoeking(b.getAttribute('data-del'));
         if(bewerkId === b.getAttribute('data-del')) bewerkId = null;
         await renderScherm();
@@ -870,9 +872,9 @@
       return;
     }
 
-    if(curView === "invoeren" && curItem === "omzet"){
+    if(curView === "invoeren" && (curItem === "omzet" || curItem === "inkoop" || curItem === "kosten")){
       schermEl.innerHTML = '<div class="fw-leeg"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 6V3M12 21v-3M6 12H3M21 12h-3M7.8 7.8L5.6 5.6M18.4 18.4l-2.2-2.2M7.8 16.2l-2.2 2.2M18.4 5.6l-2.2 2.2"/></svg>Laden…</div>';
-      await schermOmzet();
+      await schermBoeking(curItem);
       return;
     }
 
