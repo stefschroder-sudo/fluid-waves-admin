@@ -122,6 +122,7 @@
     <div class="fw-top" data-view="btw" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M5 21V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16l-3-2-2 2-2-2-2 2-2-2z"/><path d="M9 9l6 6M9 9.5v-.5M15 15v-.5"/></svg>BTW-aangifte</div>
     <div class="fw-top" data-view="ib" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>IB-aangifte</div>
     <div class="fw-top" data-view="resultaat" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 19h16M4 15l4-6 4 3 4-8"/></svg>Resultaat</div>
+    <div class="fw-top" data-view="belasting" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 11h.01M15 11h.01"/></svg>Belastingregels</div>
   </div>
 
   <div style="display:flex;">
@@ -459,6 +460,13 @@
         {id:"wenv",     icon:"report-money", label:"Winst- en verlies", groep:"Overzicht"},
         {id:"kwartaal", icon:"calendar-stats",label:"Per kwartaal",     groep:"Overzicht"},
         {id:"maand",    icon:"calendar-month",label:"Per maand",        groep:"Overzicht"}
+      ]
+    },
+    belasting: {
+      titel:"Belastingregels", actie:null,
+      items:[
+        {id:"regels",    icon:"file-text", label:"Actuele regels",  groep:"Informatie"},
+        {id:"instellingen", icon:"settings", label:"Instellingen",  groep:"Informatie"}
       ]
     }
   };
@@ -1397,6 +1405,11 @@
       return;
     }
 
+    if(curView === "belasting"){
+      await schermBelasting();
+      return;
+    }
+
     // Overige schermen: nog leeg
     schermEl.innerHTML =
       '<div class="fw-leeg">'+
@@ -1531,6 +1544,122 @@
     };
     var naam = (adminNaam+" Resultaat "+periodeLabel()).replace(/[^a-zA-Z0-9 ()-]/g,"").replace(/\s+/g,"_");
     await stuurNaarExport(payload, naam);
+  }
+
+  // ── Belastingregels (informatief, losgekoppeld van de berekeningen) ──────
+  var belastingCache = {};   // per jaar het opgehaalde resultaat
+
+  async function schermBelasting(){
+    if(curItem === "instellingen"){
+      schermEl.innerHTML =
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:20px; max-width:620px;">'+
+          '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:8px;">Over de belastingregels</div>'+
+          '<div style="font-size:12px; color:var(--inkt); line-height:1.6;">'+
+            'Deze pagina toont een door AI opgestelde samenvatting van de belastingregels, ter informatie. '+
+            'De tarieven die de app in de btw- en resultaatberekeningen gebruikt, staan vast en worden '+
+            '<b>niet</b> automatisch door de AI aangepast. Zo kan een fout in de samenvatting nooit je '+
+            'aangifte beïnvloeden.<br><br>'+
+            'Controleer belangrijke cijfers altijd zelf op <span style="color:var(--navy); font-weight:600;">belastingdienst.nl</span>. '+
+            'Dit is een hulpmiddel om op de hoogte te blijven, geen belastingadvies.'+
+          '</div>'+
+        '</div>';
+      return;
+    }
+
+    // Hoofdpagina: actuele regels
+    var cache = belastingCache[BOEKJAAR];
+    schermEl.innerHTML = belastingHtml(cache, false);
+    koppelBelastingKnop();
+  }
+
+  function belastingHtml(data, bezig){
+    var statusBalk;
+    if(data && data.opgehaald){
+      statusBalk = '<div style="display:flex; align-items:center; gap:8px; background:#F1F6F1; border:1px solid var(--groen); border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:12px; color:var(--groen);">'+
+        '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M20 6L9 17l-5-5"/></svg>'+
+        'Belastingregels voor '+BOEKJAAR+' bijgewerkt op '+data.opgehaald+' (bron: AI-samenvatting, controleer op belastingdienst.nl)</div>';
+    } else {
+      statusBalk = '<div style="background:var(--papier); border:1px solid var(--rand); border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:12px; color:var(--grijs);">'+
+        'Nog niet opgehaald voor '+BOEKJAAR+'. Klik hieronder om een actuele samenvatting op te halen.</div>';
+    }
+
+    var knop =
+      '<div style="display:flex; align-items:center; gap:14px; margin-bottom:18px; flex-wrap:wrap;">'+
+        '<button id="bel-ophaal" '+(bezig?'disabled':'')+' style="display:inline-flex; align-items:center; gap:8px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 18px; cursor:pointer; min-width:220px; justify-content:center;">'+
+          (bezig
+            ? 'De AI zoekt de actuele regels op…'
+            : '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>Regels voor '+BOEKJAAR+' bijwerken')+
+        '</button>'+
+        '<span style="flex:1; min-width:220px; font-size:11px; color:var(--grijs); line-height:1.4;">De AI zoekt de actuele tarieven op via officiële bronnen. De tarieven in de berekeningen van de app veranderen hierdoor niet — dit is puur ter informatie. Controleer altijd op belastingdienst.nl.</span>'+
+      '</div>';
+
+    var inhoud = "";
+    if(data && data.data){
+      var d = data.data;
+      inhoud += '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; max-width:720px; margin-bottom:14px;">';
+      if(d.samenvatting){ inhoud += '<div style="font-size:12.5px; color:var(--inkt); line-height:1.55; margin-bottom:14px;">'+ontsnap(d.samenvatting)+'</div>'; }
+      if(d.punten && d.punten.length){
+        inhoud += '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700; margin-bottom:8px;">Kerncijfers '+BOEKJAAR+'</div>';
+        d.punten.forEach(function(p, i){
+          inhoud += '<div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline; padding:8px 0; '+(i?"border-top:1px solid var(--rand-licht);":"")+'">'+
+            '<span style="font-size:12px; color:var(--inkt);"><b style="color:var(--navy);">'+ontsnap(p.onderwerp||"")+'</b>'+(p.toelichting?' <span style="color:var(--grijs);">· '+ontsnap(p.toelichting)+'</span>':'')+'</span>'+
+            '<span style="font-size:12px; font-weight:700; color:var(--navy); white-space:nowrap;">'+ontsnap(p.waarde||"")+'</span>'+
+          '</div>';
+        });
+      }
+      inhoud += '</div>';
+
+      if(d.wijzigingen && d.wijzigingen.length){
+        inhoud += '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; max-width:720px; margin-bottom:14px;">'+
+          '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700; margin-bottom:8px;">Wijzigingen t.o.v. vorig jaar</div>';
+        d.wijzigingen.forEach(function(w){
+          inhoud += '<div style="font-size:12px; color:var(--inkt); padding:4px 0 4px 14px; position:relative; line-height:1.5;"><span style="position:absolute; left:0; color:var(--goud);">–</span>'+ontsnap(w)+'</div>';
+        });
+        inhoud += '</div>';
+      }
+
+      inhoud += '<div style="font-size:10.5px; color:var(--grijs); max-width:720px; line-height:1.5;">'+
+        'Deze samenvatting is door AI opgesteld en kan fouten bevatten. De tarieven waarmee de app rekent zijn hierdoor niet gewijzigd. '+
+        'Controleer alle cijfers op belastingdienst.nl voordat je ze gebruikt.';
+      if(d.bronnen && d.bronnen.length){
+        inhoud += '<br>Geraadpleegd: '+d.bronnen.map(function(u){ return ontsnap(u); }).join(", ");
+      }
+      inhoud += '</div>';
+    } else if(data && data.ruwe_tekst){
+      inhoud = '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; max-width:720px; font-size:12px; color:var(--inkt); line-height:1.6; white-space:pre-wrap;">'+ontsnap(data.ruwe_tekst)+'</div>';
+    }
+
+    return statusBalk + knop + inhoud;
+  }
+
+  function ontsnap(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  function koppelBelastingKnop(){
+    var b = document.getElementById('bel-ophaal');
+    if(!b) return;
+    b.onclick = async function(){
+      schermEl.innerHTML = belastingHtml(belastingCache[BOEKJAAR], true);   // 'bezig'-staat
+      try {
+        var r = await fetch("/api/belastingregels", {
+          method:"POST", headers:{ "content-type":"application/json" },
+          body: JSON.stringify({ jaar: BOEKJAAR })
+        });
+        var uit = await r.json();
+        if(uit.ok || uit.ruwe_tekst){
+          belastingCache[BOEKJAAR] = {
+            opgehaald: new Date().toLocaleDateString('nl-NL'),
+            data: uit.data || null,
+            ruwe_tekst: uit.ruwe_tekst || null
+          };
+        } else {
+          await fwMelding("Ophalen mislukt: " + (uit.error || "onbekende fout") + ". Probeer het later opnieuw.");
+        }
+      } catch(e){
+        await fwMelding("Ophalen mislukt: " + (e.message||e));
+      }
+      schermEl.innerHTML = belastingHtml(belastingCache[BOEKJAAR], false);
+      koppelBelastingKnop();
+    };
   }
 
 
