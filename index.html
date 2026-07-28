@@ -89,10 +89,11 @@
         <button class="fw-per" data-per="kwartaal" style="border:none; border-left:1px solid rgba(255,255,255,.28); background:var(--goud); color:var(--navy); font-size:11.5px; padding:6px 11px; cursor:pointer; font-weight:600;">Kwartaal</button>
         <button class="fw-per" data-per="jaar" style="border:none; border-left:1px solid rgba(255,255,255,.28); background:transparent; color:#C7CEDA; font-size:11.5px; padding:6px 11px; cursor:pointer;">Jaar</button>
       </div>
+      <select id="fw-jaar-keuze" style="border:1px solid rgba(255,255,255,.28); border-radius:8px; background:var(--navy); font-size:11.5px; padding:6px 8px; color:#FFFFFF; font-weight:600;"></select>
       <select id="fw-periode-keuze" style="border:1px solid rgba(255,255,255,.28); border-radius:8px; background:var(--navy); font-size:11.5px; padding:6px 8px; color:#FFFFFF;"></select>
       <div style="display:flex; align-items:center; gap:8px;">
-        <div style="width:30px; height:30px; border-radius:50%; background:var(--goud); color:var(--navy); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">SS</div>
-        <span style="font-size:12.5px; color:#FFFFFF;">Stef Schröder</span>
+        <div id="fw-user-ini" style="width:30px; height:30px; border-radius:50%; background:var(--goud); color:var(--navy); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">·</div>
+        <span id="fw-user-naam" style="font-size:12.5px; color:#FFFFFF;"></span>
       </div>
     </div>
   </div>
@@ -134,10 +135,10 @@
       <div id="fw-sel-wrap" style="padding:12px 12px 10px; border-bottom:1px solid var(--rand);">
         <div class="fw-lbl" style="font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--grijs); margin-bottom:6px;">Administratie</div>
         <button id="fw-sel-btn" aria-expanded="false" style="width:100%; display:flex; align-items:center; gap:8px; background:var(--wit); border:1px solid var(--rand-licht); border-radius:8px; padding:8px 10px; cursor:pointer; text-align:left;">
-          <span id="fw-sel-ini" style="width:26px; height:26px; flex-shrink:0; border-radius:6px; background:var(--navy); color:var(--papier); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600;">SC</span>
+          <span id="fw-sel-ini" style="width:26px; height:26px; flex-shrink:0; border-radius:6px; background:var(--navy); color:var(--papier); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600;">·</span>
           <span class="fw-lbl" style="flex:1; min-width:0; line-height:1.2;">
-            <span id="fw-sel-org" style="display:block; font-size:12.5px; font-weight:600; color:var(--navy); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Schröder Consult</span>
-            <span id="fw-sel-sub" style="display:block; font-size:10px; color:var(--grijs);">KvK 87125897</span>
+            <span id="fw-sel-org" style="display:block; font-size:12.5px; font-weight:600; color:var(--navy); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Administratie</span>
+            <span id="fw-sel-sub" style="display:block; font-size:10px; color:var(--grijs);">laden…</span>
           </span>
           <svg id="fw-sel-chev" class="ic fw-lbl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px; color:var(--grijs); transition:transform .15s;"><path d="M6 9l6 6 6-6"/></svg>
         </button>
@@ -160,7 +161,7 @@
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
         <div>
           <div id="fw-titel" style="font-size:18px; font-weight:700; color:var(--navy);">Invoeren</div>
-          <div id="fw-subtitel" style="font-size:11.5px; color:var(--grijs);">Schröder Consult · boekjaar 2026</div>
+          <div id="fw-subtitel" style="font-size:11.5px; color:var(--grijs);">boekjaar 2026</div>
         </div>
         <div id="fw-actie" style="display:flex; align-items:center; gap:8px; background:var(--navy); color:var(--papier); padding:8px 13px; border-radius:8px; font-size:12px; cursor:pointer;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 5v14M5 12h14"/></svg>Nieuwe regel</div>
       </div>
@@ -324,8 +325,20 @@
   async function naBinnenkomst(){
     loginEl.style.display = "none";
     root.style.display = "";
+    toonGebruiker();
     await laadAdmins();
     applyAdmin(); renderNav(); await renderScherm();
+  }
+
+  // De ingelogde gebruiker tonen rechtsboven (naam uit metadata, anders e-mail)
+  function toonGebruiker(){
+    if(!user) return;
+    var naam = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.naam)) || user.email || "";
+    var ini = naam ? naam.trim().split(/[\s@.]+/).filter(Boolean).slice(0,2).map(function(w){return w[0];}).join("").toUpperCase() : "·";
+    var naamEl = document.getElementById('fw-user-naam');
+    var iniEl = document.getElementById('fw-user-ini');
+    if(naamEl) naamEl.textContent = naam;
+    if(iniEl) iniEl.textContent = ini || "·";
   }
 
   // ── Administraties uit de database ───────────────────────────────────────
@@ -426,6 +439,14 @@
   var curView = "invoeren";
   var curItem = "omzet";
   var BOEKJAAR = 2026;
+  // Standaarddatum voor een nieuwe boeking: vandaag als we in het huidige jaar
+  // werken, anders het midden van het gekozen boekjaar (zodat de boeking meteen
+  // binnen de filter valt).
+  function standaardDatum(){
+    var nu = new Date();
+    if(nu.getFullYear() === BOEKJAAR) return nu.toISOString().slice(0,10);
+    return BOEKJAAR + "-07-01";
+  }
   var bewerkId = null;   // id van de regel die nu bewerkt wordt, of null bij nieuw
   var factuurWachtrij = [];   // stapel bestanden die nog verwerkt moeten worden
   var factuurIndex = 0;       // welke van de stapel nu in het formulier staat
@@ -458,6 +479,20 @@
     lijst.forEach(function(label, i){
       var o=document.createElement('option'); o.value=i+1; o.textContent=label;
       if(i+1===actief) o.selected=true; sel.appendChild(o);
+    });
+  }
+  function vulJaarKeuze(){
+    var sel = document.getElementById('fw-jaar-keuze');
+    if(!sel) return;
+    sel.innerHTML="";
+    // Een redelijk bereik rond het huidige jaar: enkele jaren terug en één vooruit.
+    var nu = new Date().getFullYear();
+    var jaren = [];
+    for(var j=nu+1; j>=nu-4; j--){ jaren.push(j); }
+    if(jaren.indexOf(BOEKJAAR)<0){ jaren.push(BOEKJAAR); jaren.sort(function(a,b){return b-a;}); }
+    jaren.forEach(function(j){
+      var o=document.createElement('option'); o.value=j; o.textContent="Boekjaar "+j;
+      if(j===BOEKJAAR) o.selected=true; sel.appendChild(o);
     });
   }
 
@@ -991,7 +1026,7 @@
       document.getElementById('o-btw').value = String(huidige.btw_pct || 21);
       document.getElementById('o-oms').value = huidige.omschrijving || "";
     } else {
-      document.getElementById('o-datum').value = new Date().toISOString().slice(0,10);
+      document.getElementById('o-datum').value = standaardDatum();
     }
 
     // ── De drie bedragvelden houden elkaar in overeenstemming ──────────────
@@ -1100,7 +1135,7 @@
     }
 
     function leegFormulier(){
-      document.getElementById('o-datum').value = new Date().toISOString().slice(0,10);
+      document.getElementById('o-datum').value = standaardDatum();
       document.getElementById('o-klant').value = "";
       document.getElementById('o-excl').value = "";
       document.getElementById('o-btwbedrag').value = "";
@@ -1666,6 +1701,11 @@
     await renderScherm();
   };
 
+  document.getElementById('fw-jaar-keuze').onchange = async function(){
+    BOEKJAAR = parseInt(this.value, 10);
+    await renderScherm();
+  };
+
   // Overzichtsstrook tonen/verbergen
   (function(){
     var strookOpen = true;
@@ -1680,6 +1720,7 @@
 
   // ── Start ────────────────────────────────────────────────────────────────
   (async function(){
+    vulJaarKeuze();
     vulPeriodeKeuze();
     // Mocht de client tóch een sessie hebben bewaard, gebruik hem; anders
     // blijft het inlogscherm staan (het token krijgen we dan vers bij de login).
