@@ -881,6 +881,12 @@
       b.onclick = async function(){
         var nieuwRitme = b.getAttribute('data-ritme');
         if(nieuwRitme === ritmeVan()) return;
+        var akkoord = confirm(
+          "De keuze om btw per maand of per kwartaal aan te geven kan gedurende het jaar niet worden gewijzigd.\n\n" +
+          "De Belastingdienst legt het aangifteritme voor het hele tijdvak vast. Wijzig dit alleen als er nog geen aangifte voor dit jaar is gedaan.\n\n" +
+          "Wil je het ritme toch wijzigen naar " + (nieuwRitme === "maand" ? "maand" : "kwartaal") + "?"
+        );
+        if(!akkoord) return;
         var r = await dbClient().from('adm_administraties').update({ btw_ritme:nieuwRitme }).eq('id', curAdmin);
         if(r.error){ alert("Ritme opslaan mislukt: " + r.error.message); return; }
         admins[curAdmin].ritme = nieuwRitme;
