@@ -219,6 +219,77 @@
   var boekingen = [];       // boekingen van de actieve administratie
   var user = null;
 
+  // ── Eigen dialoogvensters (vervangen alert/confirm/prompt) ───────────────
+  // Eén overlay in huisstijl. Elke functie geeft een Promise terug:
+  //   fwMelding(tekst)              → los na OK
+  //   fwBevestig(tekst, opties)     → true/false
+  //   fwVraag(tekst, standaard)     → ingevoerde tekst of null
+  function fwDialoog(opts){
+    return new Promise(function(resolve){
+      var overlay = document.createElement('div');
+      overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2000; padding:20px;";
+
+      var box = document.createElement('div');
+      box.style.cssText = "width:100%; max-width:400px; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25); overflow:hidden;";
+
+      var kop = document.createElement('div');
+      kop.style.cssText = "background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; font-size:13px; font-weight:700; color:#FFFFFF;";
+      kop.textContent = opts.titel || "Uw administratie meldt het volgende";
+
+      var body = document.createElement('div');
+      body.style.cssText = "padding:18px;";
+
+      var tekst = document.createElement('div');
+      tekst.style.cssText = "font-size:12.5px; color:var(--inkt); line-height:1.5; white-space:pre-line; margin-bottom:16px;";
+      tekst.textContent = opts.tekst || "";
+      body.appendChild(tekst);
+
+      var invoer = null;
+      if(opts.type === "vraag"){
+        invoer = document.createElement('input');
+        invoer.type = "text";
+        invoer.value = opts.standaard || "";
+        invoer.style.cssText = "width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); margin-bottom:16px;";
+        body.appendChild(invoer);
+      }
+
+      var knoppen = document.createElement('div');
+      knoppen.style.cssText = "display:flex; gap:8px; justify-content:flex-end;";
+
+      function sluit(waarde){ document.body.removeChild(overlay); resolve(waarde); }
+
+      if(opts.type !== "melding"){
+        var annuleer = document.createElement('button');
+        annuleer.textContent = opts.annuleerLabel || "Annuleren";
+        annuleer.style.cssText = "padding:9px 16px; background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; cursor:pointer;";
+        annuleer.onclick = function(){ sluit(opts.type === "vraag" ? null : false); };
+        knoppen.appendChild(annuleer);
+      }
+
+      var ok = document.createElement('button');
+      ok.textContent = opts.okLabel || "OK";
+      ok.style.cssText = "padding:9px 16px; background:var(--navy); border:1px solid var(--navy); color:var(--papier); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;";
+      ok.onclick = function(){
+        if(opts.type === "vraag"){ sluit(invoer.value.trim() || null); }
+        else if(opts.type === "bevestig"){ sluit(true); }
+        else { sluit(true); }
+      };
+      knoppen.appendChild(ok);
+
+      body.appendChild(knoppen);
+      box.appendChild(kop); box.appendChild(body); overlay.appendChild(box);
+      document.body.appendChild(overlay);
+
+      if(invoer){ invoer.focus(); invoer.select();
+        invoer.addEventListener('keydown', function(e){ if(e.key==="Enter") ok.onclick(); });
+      } else { ok.focus(); }
+      overlay.addEventListener('keydown', function(e){ if(e.key==="Escape" && opts.type!=="melding"){ sluit(opts.type==="vraag"?null:false); } });
+    });
+  }
+  function fwMelding(tekst, titel){ return fwDialoog({ type:"melding", tekst:tekst, titel:titel }); }
+  function fwBevestig(tekst, opts){ opts=opts||{}; return fwDialoog({ type:"bevestig", tekst:tekst, titel:opts.titel, okLabel:opts.okLabel, annuleerLabel:opts.annuleerLabel }); }
+  function fwVraag(tekst, standaard, titel){ return fwDialoog({ type:"vraag", tekst:tekst, standaard:standaard, titel:titel }); }
+
   // ── Login ────────────────────────────────────────────────────────────────
   var loginEl = document.getElementById('fw-login');
   var loginBtn = document.getElementById('fw-login-btn');
@@ -260,7 +331,7 @@
     admins = {};
     var r = await dbClient().from('adm_administraties').select('*').order('aangemaakt');
     if(r.error){
-      alert("Kon administraties niet laden: " + r.error.message);
+      await fwMelding("Kon administraties niet laden: " + r.error.message);
       return;
     }
     r.data.forEach(function(a){
@@ -276,7 +347,7 @@
 
   async function nieuweAdmin(naam){
     if(!user || !ACCESS_TOKEN){
-      alert("Je sessie is verlopen. Log opnieuw in.");
+      await fwMelding("Je sessie is verlopen. Log opnieuw in.");
       loginEl.style.display = "flex";
       root.style.display = "none";
       return false;
@@ -284,7 +355,7 @@
     var r = await dbClient().from('adm_administraties')
       .insert({ user_id:user.id, naam:naam })
       .select().single();
-    if(r.error){ alert("Aanmaken mislukt: "+r.error.message); return false; }
+    if(r.error){ await fwMelding("Aanmaken mislukt: "+r.error.message); return false; }
     admins[r.data.id] = { naam:naam, ini:initialen(naam), sub:"nieuwe administratie" };
     curAdmin = r.data.id;
     return true;
@@ -408,7 +479,7 @@
 
   document.getElementById('fw-nieuw').onclick = async function(e){
     e.stopPropagation();
-    var naam = prompt("Naam van de nieuwe administratie:");
+    var naam = await fwVraag("Naam van de nieuwe administratie:", "");
     if(naam){ await nieuweAdmin(naam); applyAdmin(); renderAdmins(); await renderScherm(); }
   };
 
@@ -499,7 +570,7 @@
                 status:status, bedrag:bedrag, bijgewerkt:new Date().toISOString() },
               { onConflict: 'administratie_id,jaar,periode_type,periode_nummer' })
       .select().single();
-    if(r.error){ alert("Opslaan status mislukt: " + r.error.message); return false; }
+    if(r.error){ await fwMelding("Opslaan status mislukt: " + r.error.message); return false; }
     return true;
   }
 
@@ -545,19 +616,19 @@
     rec.user_id = user.id;
     rec.administratie_id = curAdmin;
     var r = await dbClient().from('adm_boekingen').insert(rec).select().single();
-    if(r.error){ alert("Opslaan mislukt: "+r.error.message); return null; }
+    if(r.error){ await fwMelding("Opslaan mislukt: "+r.error.message); return null; }
     return r.data;
   }
 
   async function wijzigBoeking(id, rec){
     var r = await dbClient().from('adm_boekingen').update(rec).eq('id', id).select().single();
-    if(r.error){ alert("Bijwerken mislukt: "+r.error.message); return null; }
+    if(r.error){ await fwMelding("Bijwerken mislukt: "+r.error.message); return null; }
     return r.data;
   }
 
   async function verwijderBoeking(id){
     var r = await dbClient().from('adm_boekingen').delete().eq('id', id);
-    if(r.error){ alert("Verwijderen mislukt: "+r.error.message); }
+    if(r.error){ await fwMelding("Verwijderen mislukt: "+r.error.message); }
   }
 
   // ── Bestanden (Supabase Storage) ─────────────────────────────────────────
@@ -567,12 +638,12 @@
     var veilig = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     var pad = user.id + "/" + curAdmin + "/" + Date.now() + "_" + veilig;
     var r = await dbClient().storage.from('adm-bestanden').upload(pad, file);
-    if(r.error){ alert("Upload mislukt: " + r.error.message); return false; }
+    if(r.error){ await fwMelding("Upload mislukt: " + r.error.message); return false; }
     return pad;
   }
   async function openBestand(pad){
     var r = await dbClient().storage.from('adm-bestanden').createSignedUrl(pad, 60);
-    if(r.error){ alert("Openen mislukt: " + r.error.message); return; }
+    if(r.error){ await fwMelding("Openen mislukt: " + r.error.message); return; }
     window.open(r.data.signedUrl, "_blank");
   }
 
@@ -710,7 +781,7 @@
     document.getElementById('o-opslaan').onclick = async function(){
       var excl = parseFloat(document.getElementById('o-excl').value) || 0;
       var pct = parseInt(document.getElementById('o-btw').value, 10);
-      if(!excl){ alert("Vul een bedrag in."); return; }
+      if(!excl){ await fwMelding("Vul een bedrag in."); return; }
       var btw = Math.round(excl * pct) / 100;
       this.textContent = "Bezig…"; this.disabled = true;
 
@@ -752,7 +823,7 @@
     Array.prototype.forEach.call(schermEl.querySelectorAll('[data-del]'), function(b){
       b.onclick = async function(e){
         e.stopPropagation();
-        if(!confirm("Deze omzetregel verwijderen?")) return;
+        if(!(await fwBevestig("Deze omzetregel verwijderen?", {okLabel:"Verwijderen"}))) return;
         await verwijderBoeking(b.getAttribute('data-del'));
         if(bewerkId === b.getAttribute('data-del')) bewerkId = null;
         await renderScherm();
@@ -789,7 +860,7 @@
         '</div>';
       var b = document.getElementById('fw-eerste');
       if(b) b.onclick = async function(){
-        var naam = prompt("Naam van je administratie:", "Schröder Consult");
+        var naam = await fwVraag("Naam van je administratie:", "Schröder Consult");
         if(!naam) return;
         b.textContent = "Bezig…"; b.disabled = true;
         var ok = await nieuweAdmin(naam);
@@ -881,14 +952,15 @@
       b.onclick = async function(){
         var nieuwRitme = b.getAttribute('data-ritme');
         if(nieuwRitme === ritmeVan()) return;
-        var akkoord = confirm(
+        var akkoord = await fwBevestig(
           "De keuze om btw per maand of per kwartaal aan te geven kan gedurende het jaar niet worden gewijzigd.\n\n" +
           "De Belastingdienst legt het aangifteritme voor het hele tijdvak vast. Wijzig dit alleen als er nog geen aangifte voor dit jaar is gedaan.\n\n" +
-          "Wil je het ritme toch wijzigen naar " + (nieuwRitme === "maand" ? "maand" : "kwartaal") + "?"
+          "Wil je het ritme toch wijzigen naar " + (nieuwRitme === "maand" ? "maand" : "kwartaal") + "?",
+          { okLabel:"Ja, wijzigen", annuleerLabel:"Annuleren" }
         );
         if(!akkoord) return;
         var r = await dbClient().from('adm_administraties').update({ btw_ritme:nieuwRitme }).eq('id', curAdmin);
-        if(r.error){ alert("Ritme opslaan mislukt: " + r.error.message); return; }
+        if(r.error){ await fwMelding("Ritme opslaan mislukt: " + r.error.message); return; }
         admins[curAdmin].ritme = nieuwRitme;
         await renderScherm();
       };
