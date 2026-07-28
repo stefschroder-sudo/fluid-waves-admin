@@ -293,6 +293,39 @@
   function fwBevestig(tekst, opts){ opts=opts||{}; return fwDialoog({ type:"bevestig", tekst:tekst, titel:opts.titel, okLabel:opts.okLabel, annuleerLabel:opts.annuleerLabel }); }
   function fwVraag(tekst, standaard, titel){ return fwDialoog({ type:"vraag", tekst:tekst, standaard:standaard, titel:titel }); }
 
+  // Keuzedialoog met meerdere knoppen. 'opties' is een lijst van {label, waarde, gevaar}.
+  // Geeft de gekozen waarde terug, of null bij annuleren.
+  function fwKeuze(tekst, titel, opties){
+    return new Promise(function(resolve){
+      var overlay = document.createElement('div');
+      overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2200; padding:20px;";
+      var box = document.createElement('div');
+      box.style.cssText = "width:100%; max-width:420px; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25); overflow:hidden;";
+      var knoppenHtml = opties.map(function(o, i){
+        var kleur = o.gevaar ? "var(--rood)" : "var(--navy)";
+        return '<button data-keuze="'+i+'" style="width:100%; text-align:left; padding:11px 14px; margin-bottom:8px; background:transparent; border:1px solid '+kleur+'; color:'+kleur+'; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">'+o.label+'</button>';
+      }).join("");
+      box.innerHTML =
+        '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; font-size:13px; font-weight:700; color:#FFFFFF;">'+(titel||"Maak een keuze")+'</div>'+
+        '<div style="padding:18px;">'+
+          '<div style="font-size:12.5px; color:var(--inkt); line-height:1.5; white-space:pre-line; margin-bottom:16px;">'+tekst+'</div>'+
+          knoppenHtml+
+          '<button data-keuze="annuleer" style="width:100%; padding:9px 14px; margin-top:4px; background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; cursor:pointer;">Annuleren</button>'+
+        '</div>';
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+      function sluit(waarde){ document.body.removeChild(overlay); resolve(waarde); }
+      Array.prototype.forEach.call(box.querySelectorAll('[data-keuze]'), function(b){
+        b.onclick = function(){
+          var k = b.getAttribute('data-keuze');
+          if(k === "annuleer"){ sluit(null); }
+          else { sluit(opties[parseInt(k,10)].waarde); }
+        };
+      });
+      overlay.addEventListener('click', function(e){ if(e.target === overlay) sluit(null); });
+    });
+  }
+
   // ── Login ────────────────────────────────────────────────────────────────
   var loginEl = document.getElementById('fw-login');
   var loginBtn = document.getElementById('fw-login-btn');
@@ -600,15 +633,29 @@
 
     document.getElementById('bh-leeg').onclick = async function(){
       sluit();
+      // Eerst kiezen: alleen het geselecteerde boekjaar of alles
+      var keuze = await fwKeuze(
+        "Wat wil je leegmaken van \""+a.naam+"\"? De administratie zelf blijft bestaan.",
+        "Administratie leegmaken",
+        [
+          { label:"Alleen boekjaar "+BOEKJAAR, waarde:"jaar", gevaar:true },
+          { label:"Alle boekjaren", waarde:"alles", gevaar:true }
+        ]
+      );
+      if(keuze === null) return;
+      var jaar = (keuze === "jaar") ? BOEKJAAR : null;
+      var wat = jaar ? ("boekjaar "+jaar) : "alle boekjaren";
+
       var bevestig = await fwVraag(
-        "Alle boekingen en documenten van \""+a.naam+"\" worden definitief verwijderd. De administratie zelf blijft leeg bestaan.\n\nTyp de naam van de administratie om te bevestigen:",
-        "", "Administratie leegmaken"
+        "Alle boekingen en documenten van "+wat+" worden definitief verwijderd.\n\nTyp de naam van de administratie om te bevestigen:",
+        "", "Leegmaken bevestigen"
       );
       if(bevestig === null) return;
       if(bevestig.trim() !== a.naam){ await fwMelding("De naam kwam niet overeen. Er is niets verwijderd."); return; }
-      var fout = await leegAdmin(id);
+      var fout = await leegAdmin(id, jaar);
+      if(fout === "__geen__"){ await fwMelding("Er zijn geen boekingen in boekjaar "+jaar+". Er is niets verwijderd."); return; }
       if(fout){ await fwMelding("Leegmaken mislukt: " + fout); return; }
-      await fwMelding("\""+a.naam+"\" is leeggemaakt. De administratie bestaat nog, maar bevat geen boekingen meer.");
+      await fwMelding("\""+a.naam+"\" is leeggemaakt ("+wat+").");
       await laadAdmins(); applyAdmin(); renderAdmins(); await renderScherm();
     };
 
@@ -630,22 +677,35 @@
     };
   }
 
-  // Alle boekingen én geüploade bestanden van een administratie verwijderen.
+  // Boekingen én geüploade bestanden van een administratie verwijderen.
+  // Als 'jaar' is opgegeven, alleen dat boekjaar; anders alles.
   // Geeft null bij succes, anders een foutmelding-tekst.
-  async function leegAdmin(id){
-    // 1. Bestandspaden ophalen om ze uit de opslag te wissen
-    var r = await dbClient().from('adm_boekingen').select('bestand_pad').eq('administratie_id', id);
+  async function leegAdmin(id, jaar){
+    // Boekingen ophalen (met datum en bestandspad) om te bepalen wat weg moet
+    var r = await dbClient().from('adm_boekingen').select('id, datum, bestand_pad').eq('administratie_id', id);
     if(r.error) return r.error.message;
-    var paden = (r.data||[]).map(function(b){ return b.bestand_pad; }).filter(Boolean);
+    var rijen = r.data || [];
+    if(jaar){
+      rijen = rijen.filter(function(b){ return b.datum && new Date(b.datum).getFullYear() === jaar; });
+    }
+    if(!rijen.length && jaar){ return "__geen__"; }   // niets in dat jaar
+
+    // 1. Bestanden uit de opslag verwijderen
+    var paden = rijen.map(function(b){ return b.bestand_pad; }).filter(Boolean);
     if(paden.length){
       var rb = await dbClient().storage.from('adm-bestanden').remove(paden);
-      if(rb.error) return rb.error.message;   // bestanden weg
+      if(rb.error) return rb.error.message;
     }
-    // 2. Boekingen verwijderen
-    var rd = await dbClient().from('adm_boekingen').delete().eq('administratie_id', id);
-    if(rd.error) return rd.error.message;
-    // 3. Btw-statussen van deze administratie opruimen
-    await dbClient().from('adm_btw_status').delete().eq('administratie_id', id);
+    // 2. Boekingen verwijderen — op id's (zodat het jaar-filter klopt)
+    var ids = rijen.map(function(b){ return b.id; });
+    if(ids.length){
+      var rd = await dbClient().from('adm_boekingen').delete().in('id', ids);
+      if(rd.error) return rd.error.message;
+    }
+    // 3. Btw-statussen opruimen — per jaar of alles
+    var q = dbClient().from('adm_btw_status').delete().eq('administratie_id', id);
+    if(jaar){ q = q.eq('jaar', jaar); }
+    await q;
     return null;
   }
   function applyAdmin(){
