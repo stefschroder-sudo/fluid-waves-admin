@@ -1410,6 +1410,11 @@
       return;
     }
 
+    if(curView === "ib"){
+      await schermIB();
+      return;
+    }
+
     // Overige schermen: nog leeg
     schermEl.innerHTML =
       '<div class="fw-leeg">'+
@@ -1660,6 +1665,102 @@
       schermEl.innerHTML = belastingHtml(belastingCache[BOEKJAAR], false);
       koppelBelastingKnop();
     };
+  }
+
+  // ── IB-aangifte: voorbereiding (niveau 1) ─────────────────────────────────
+  // Richtbedragen. Bewust als "controleer"-waarden — de belastingregels-pagina
+  // toont de actuele cijfers; hier staan werkbare richtbedragen voor de indicatie.
+  var IB_AFTREK = {
+    2025: { zelfstandigen:2470, starters:2123, mkbPct:12.7 },
+    2026: { zelfstandigen:1200, starters:2123, mkbPct:12.7 }
+  };
+  // Onthoud per sessie welke posten zijn aangevinkt (voorbereidingshulpmiddel)
+  var ibKeuze = { zelfstandigen:false, starters:false, mkb:true, urencriterium:false };
+
+  async function schermIB(){
+    // Winst uit onderneming = jaarresultaat. IB gaat over het hele boekjaar,
+    // dus we nemen bewust het jaartotaal, ongeacht de periodekeuze.
+    var bewaardePeriode = { type:periode.type, maand:periode.maand, kwartaal:periode.kwartaal };
+    periode.type = "jaar";
+    var c = await resultaatCijfers();
+    periode.type = bewaardePeriode.type; periode.maand = bewaardePeriode.maand; periode.kwartaal = bewaardePeriode.kwartaal;
+
+    var winst = c.resultaat;
+    var tarief = IB_AFTREK[BOEKJAAR] || IB_AFTREK[2026];
+
+    // Berekening volgt de aangevinkte posten
+    var zelfstandigenBedrag = (ibKeuze.zelfstandigen && ibKeuze.urencriterium) ? tarief.zelfstandigen : 0;
+    var startersBedrag = (ibKeuze.starters && ibKeuze.zelfstandigen && ibKeuze.urencriterium) ? tarief.starters : 0;
+    var naOndernemersaftrek = Math.max(0, winst - zelfstandigenBedrag - startersBedrag);
+    var mkbBedrag = ibKeuze.mkb ? Math.round(naOndernemersaftrek * tarief.mkbPct) / 100 : 0;
+    var belastbareWinst = Math.max(0, naOndernemersaftrek - mkbBedrag);
+
+    function euroRow(label, bedrag, opts){
+      opts = opts || {};
+      return '<div style="display:flex; justify-content:space-between; align-items:baseline; padding:'+(opts.groot?"11px":"8px")+' 0; '+(opts.lijn?"border-top:1px solid var(--rand-licht);":"")+(opts.dubbel?"border-top:2px solid var(--navy); margin-top:4px;":"")+'">'+
+        '<span style="font-size:'+(opts.groot?"13px":"12.5px")+'; '+(opts.vet?"font-weight:700; color:var(--navy);":"color:var(--inkt);")+(opts.indent?"padding-left:14px;":"")+'">'+label+'</span>'+
+        '<span style="font-size:'+(opts.groot?"15px":"12.5px")+'; '+(opts.vet?"font-weight:700;":"")+' color:'+(opts.kleur||"var(--inkt)")+'; font-variant-numeric:tabular-nums;">'+(opts.min&&bedrag>0?"– ":"")+eur(bedrag)+'</span>'+
+      '</div>';
+    }
+
+    function vink(id, aan, label, sub){
+      return '<label style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--rand-licht); cursor:pointer;">'+
+        '<input type="checkbox" data-ib="'+id+'" '+(aan?"checked":"")+' style="margin-top:2px; width:16px; height:16px; accent-color:var(--navy); cursor:pointer;">'+
+        '<span style="flex:1;"><span style="font-size:12.5px; font-weight:600; color:var(--navy);">'+label+'</span>'+
+        '<span style="display:block; font-size:11px; color:var(--grijs); line-height:1.4; margin-top:2px;">'+sub+'</span></span>'+
+      '</label>';
+    }
+
+    schermEl.innerHTML =
+      '<div style="max-width:680px;">'+
+        '<div style="background:#FBF6E6; border:1px solid var(--goud); border-radius:10px; padding:12px 16px; margin-bottom:18px; font-size:11.5px; color:var(--navy); line-height:1.5;">'+
+          '<b>Ter voorbereiding, geen aangifte.</b> Dit overzicht helpt je de aangifte inkomstenbelasting voor te bereiden. '+
+          'De uiteindelijke aangifte doe je bij de Belastingdienst of met je boekhouder — die kent ook je privé-situatie '+
+          '(ander inkomen, partner, hypotheek), die hier buiten valt.'+
+        '</div>'+
+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:20px 22px; margin-bottom:16px;">'+
+          '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:2px;">Winst uit onderneming</div>'+
+          '<div style="font-size:11px; color:var(--grijs); margin-bottom:10px;">Boekjaar '+BOEKJAAR+' · uit je resultaat (omzet minus kosten, excl. btw)</div>'+
+          euroRow("Winst uit onderneming", winst, {vet:true, kleur:(winst>=0?"var(--groen)":"var(--rood)")})+
+        '</div>'+
+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:20px 22px; margin-bottom:16px;">'+
+          '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:2px;">Aftrekposten</div>'+
+          '<div style="font-size:11px; color:var(--grijs); margin-bottom:6px;">Vink aan wat op jou van toepassing is. De app beslist dit niet voor je — controleer de voorwaarden.</div>'+
+          vink("urencriterium", ibKeuze.urencriterium, "Ik voldoe aan het urencriterium", "Minimaal 1.225 uur per jaar aan je onderneming besteed. Voorwaarde voor de zelfstandigen- en startersaftrek.")+
+          vink("zelfstandigen", ibKeuze.zelfstandigen, "Zelfstandigenaftrek — "+eur(tarief.zelfstandigen), "Alleen met urencriterium. Richtbedrag "+BOEKJAAR+"; controleer op belastingdienst.nl.")+
+          vink("starters", ibKeuze.starters, "Startersaftrek — "+eur(tarief.starters), "Alleen in de eerste jaren én met zelfstandigenaftrek. Richtbedrag; controleer je situatie.")+
+          vink("mkb", ibKeuze.mkb, "MKB-winstvrijstelling — "+tarief.mkbPct+"%", "Percentage over de winst ná ondernemersaftrek. Geldt vrijwel altijd voor ondernemers.")+
+        '</div>'+
+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:20px 22px; margin-bottom:14px;">'+
+          '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:12px;">Indicatieve belastbare winst</div>'+
+          euroRow("Winst uit onderneming", winst, {})+
+          euroRow("Zelfstandigenaftrek", zelfstandigenBedrag, {indent:true, min:true, lijn:true, kleur:"var(--rood)"})+
+          euroRow("Startersaftrek", startersBedrag, {indent:true, min:true, lijn:true, kleur:"var(--rood)"})+
+          euroRow("Winst na ondernemersaftrek", naOndernemersaftrek, {vet:true, lijn:true})+
+          euroRow("MKB-winstvrijstelling ("+tarief.mkbPct+"%)", mkbBedrag, {indent:true, min:true, lijn:true, kleur:"var(--rood)"})+
+          euroRow("Belastbare winst uit onderneming", belastbareWinst, {vet:true, groot:true, dubbel:true, kleur:"var(--navy)"})+
+        '</div>'+
+
+        '<div style="font-size:10.5px; color:var(--grijs); line-height:1.5;">'+
+          'Dit is een indicatie van je belastbare winst uit onderneming, niet de belasting die je betaalt. '+
+          'Hoeveel inkomstenbelasting je uiteindelijk verschuldigd bent, hangt af van je totale inkomen en persoonlijke '+
+          'situatie en wordt hier bewust niet berekend. De aftrekbedragen zijn richtbedragen — controleer de actuele cijfers '+
+          'via de pagina Belastingregels of op belastingdienst.nl.'+
+        '</div>'+
+      '</div>';
+
+    Array.prototype.forEach.call(schermEl.querySelectorAll('[data-ib]'), function(cb){
+      cb.onchange = async function(){
+        ibKeuze[cb.getAttribute('data-ib')] = cb.checked;
+        // Afhankelijkheden: starters vereist zelfstandigen+uren; zelfstandigen vereist uren
+        if(!ibKeuze.urencriterium){ ibKeuze.zelfstandigen = false; ibKeuze.starters = false; }
+        if(!ibKeuze.zelfstandigen){ ibKeuze.starters = false; }
+        await renderScherm();
+      };
+    });
   }
 
 
