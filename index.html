@@ -1392,6 +1392,11 @@
       return;
     }
 
+    if(curView === "resultaat"){
+      await schermResultaat();
+      return;
+    }
+
     // Overige schermen: nog leeg
     schermEl.innerHTML =
       '<div class="fw-leeg">'+
@@ -1440,6 +1445,94 @@
       '<div style="font-size:20px; font-weight:700; color:var(--papier);">'+waarde+'</div>'+
     '</div>';
   }
+
+  // ── Resultaat: winst- en verliesrekening ─────────────────────────────────
+  async function resultaatCijfers(){
+    // Alle bedragen netto (excl. btw), voor de gekozen periode.
+    var omzet  = (await laadBoekingen('omzet')).filter(function(r){ return inPeriode(r.datum); });
+    var inkoop = (await laadBoekingen('inkoop')).filter(function(r){ return inPeriode(r.datum); });
+    var kosten = (await laadBoekingen('kosten')).filter(function(r){ return inPeriode(r.datum); });
+    var loon   = (await laadBoekingen('loon')).filter(function(r){ return inPeriode(r.datum); });
+    function som(rows){ return rows.reduce(function(s,r){ return s+(Number(r.bedrag_excl)||0); }, 0); }
+    var oOmzet = som(omzet), oInkoop = som(inkoop), oKosten = som(kosten), oLoon = som(loon);
+    var totaalKosten = oInkoop + oKosten + oLoon;
+    return {
+      omzet:oOmzet, inkoop:oInkoop, kosten:oKosten, loon:oLoon,
+      totaalKosten:totaalKosten, resultaat:oOmzet - totaalKosten,
+      nOmzet:omzet.length, nInkoop:inkoop.length, nKosten:kosten.length, nLoon:loon.length
+    };
+  }
+
+  async function schermResultaat(){
+    var c = await resultaatCijfers();
+    var winst = c.resultaat >= 0;
+
+    function regel(label, bedrag, opts){
+      opts = opts || {};
+      return '<div style="display:flex; justify-content:space-between; align-items:baseline; padding:'+(opts.groot?"11px":"8px")+' 0; '+(opts.lijn?"border-top:1px solid var(--rand-licht);":"")+(opts.dubbel?"border-top:2px solid var(--navy); margin-top:4px;":"")+'">'+
+        '<span style="font-size:'+(opts.groot?"13px":"12.5px")+'; '+(opts.vet?"font-weight:700; color:var(--navy);":"color:var(--inkt);")+(opts.indent?"padding-left:14px;":"")+'">'+label+'</span>'+
+        '<span style="font-size:'+(opts.groot?"15px":"12.5px")+'; '+(opts.vet?"font-weight:700;":"")+' color:'+(opts.kleur||"var(--inkt)")+'; font-variant-numeric:tabular-nums;">'+eur(bedrag)+'</span>'+
+      '</div>';
+    }
+
+    schermEl.innerHTML =
+      '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:18px;">'+
+        kpi("Omzet · "+periodeLabel(), eur(c.omzet))+
+        kpi("Totale kosten", eur(c.totaalKosten))+
+        kpi(winst?"Winst":"Verlies", eur(Math.abs(c.resultaat)))+
+      '</div>'+
+      '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:20px 22px; max-width:620px;">'+
+        '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:2px;">Winst- en verliesrekening</div>'+
+        '<div style="font-size:11px; color:var(--grijs); margin-bottom:14px;">'+periodeLabel()+' · alle bedragen exclusief btw</div>'+
+
+        regel("Omzet", c.omzet, {vet:true})+
+        (c.nOmzet ? '' : '<div style="font-size:10.5px; color:var(--grijs); padding-bottom:6px;">Nog geen omzet in deze periode.</div>')+
+
+        '<div style="margin-top:10px; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700;">Kosten</div>'+
+        regel("Inkoop", c.inkoop, {indent:true, lijn:true})+
+        regel("Overige kosten", c.kosten, {indent:true, lijn:true})+
+        regel("Loonkosten", c.loon, {indent:true, lijn:true})+
+        regel("Totale kosten", c.totaalKosten, {vet:true, lijn:true})+
+
+        regel((winst?"Resultaat (winst)":"Resultaat (verlies)"), Math.abs(c.resultaat), {vet:true, groot:true, dubbel:true, kleur:(winst?"var(--groen)":"var(--rood)")})+
+
+        '<div style="font-size:10.5px; color:var(--grijs); margin-top:14px; line-height:1.4;">'+
+          'Dit is het bedrijfsresultaat vóór belasting en vóór ondernemersaftrekken (zoals zelfstandigenaftrek en MKB-winstvrijstelling). '+
+          'Die worden pas bij de IB-aangifte verrekend. Loonkosten tellen mee als kosten maar staan los van de btw.'+
+        '</div>'+
+
+        '<button id="res-export" style="display:inline-flex; align-items:center; gap:8px; margin-top:16px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 16px; cursor:pointer;">'+
+          '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'+
+          'Exporteer '+periodeLabel()+' naar Excel'+
+        '</button>'+
+      '</div>';
+
+    document.getElementById('res-export').onclick = async function(){
+      this.textContent = "Bezig…"; this.disabled = true;
+      try { await exporteerResultaat(); }
+      catch(e){ await fwMelding("Export mislukt: " + (e.message||e)); }
+      await renderScherm();
+    };
+  }
+
+  async function exporteerResultaat(){
+    if(!curAdmin){ await fwMelding("Kies eerst een administratie."); return; }
+    var c = await resultaatCijfers();
+    var adminNaam = admins[curAdmin] ? admins[curAdmin].naam : "Administratie";
+    var payload = {
+      modus: "resultaat",
+      periodeLabel: periodeLabel(),
+      adminNaam: adminNaam,
+      adminSub: admins[curAdmin] ? admins[curAdmin].sub : "",
+      resultaat: {
+        omzet:c.omzet, inkoop:c.inkoop, kosten:c.kosten, loon:c.loon,
+        totaalKosten:c.totaalKosten, resultaat:c.resultaat
+      }
+    };
+    var naam = (adminNaam+" Resultaat "+periodeLabel()).replace(/[^a-zA-Z0-9 ()-]/g,"").replace(/\s+/g,"_");
+    await stuurNaarExport(payload, naam);
+  }
+
 
   // ── BTW-scherm ────────────────────────────────────────────────────────────
   async function schermBtw(){
