@@ -27,7 +27,7 @@
   .fw-item:hover { background: var(--papier-diep); }
   .fw-item.actief { background: var(--papier-diep); box-shadow: inset 3px 0 0 var(--goud); }
   .fw-top { cursor: pointer; user-select: none; font-weight: 600; }
-  .fw-top.actief { color: var(--navy) !important; border-bottom-color: var(--goud) !important; }
+  .fw-top.actief { color: var(--navy) !important; font-weight: 700; background: #FFFFFF; border-bottom: 3px solid var(--goud) !important; margin-bottom: -1px; }
   .fw-note { max-width: 1080px; margin: 12px auto 0; font-size: 12px; color: #7A756A; text-align: center; }
   .fw-leeg { padding: 40px 20px; text-align: center; color: var(--grijs); }
   .fw-leeg i { font-size: 30px; color: var(--rand); display: block; margin-bottom: 8px; }
@@ -116,7 +116,7 @@
   </div>
 
   <!-- ── Bovenmenu ─────────────────────────────────────────────────────────── -->
-  <div id="fw-topmenu" style="display:flex; gap:2px; background:var(--papier); padding:0 20px; border-bottom:1px solid var(--rand); flex-wrap:wrap;">
+  <div id="fw-topmenu" style="display:flex; gap:2px; background:var(--wit); padding:0 20px; border-bottom:1px solid var(--rand); flex-wrap:wrap;">
     <div class="fw-top actief" data-view="invoeren" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16zM13.5 6.5l4 4M16 19h6M19 16v6"/></svg>Invoeren</div>
     <div class="fw-top" data-view="dashboard" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 4h7v9H4zM4 16h7v4H4zM13 4h7v4h-7zM13 11h7v9h-7z"/></svg>Dashboard</div>
     <div class="fw-top" data-view="btw" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M5 21V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16l-3-2-2 2-2-2-2 2-2-2z"/><path d="M9 9l6 6M9 9.5v-.5M15 15v-.5"/></svg>BTW-aangifte</div>
