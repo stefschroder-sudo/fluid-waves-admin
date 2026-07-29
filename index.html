@@ -2007,14 +2007,18 @@
   function nieuwConcept(){
     return {
       id:null, klant_id:null, factuurdatum:standaardDatum(),
-      omschrijving:"", status:"concept", uurtarief:0,
+      omschrijving:"", status:"concept", uurtarief:0, korting_pct:0,
       regels:[ {soort:"uren", datum:standaardDatum(), omschrijving:"", aantal:0, tarief:0, btw_pct:21} ]
     };
   }
 
-  // Totalen met btw gesplitst per tarief. Geeft excl, incl, en per-tarief-overzicht.
+  // Totalen met btw gesplitst per tarief. Korting (percentage) wordt vóór de
+  // btw toegepast, proportioneel over alle tarieven. Geeft excl (vóór korting),
+  // korting-bedrag, exclNa (na korting), btw, incl, en per-tarief-overzicht (na korting).
   function factuurTotalen(c){
-    var perTarief = {};   // { '21': {excl, btw}, '9': {...} }
+    var kortingPct = Number(c.korting_pct)||0;
+    var factor = 1 - (kortingPct/100);
+    var perTarief = {};
     var excl = 0;
     c.regels.forEach(function(r){
       var rt = (Number(r.aantal)||0)*(Number(r.tarief)||0);
@@ -2024,15 +2028,19 @@
       perTarief[p].excl += rt;
     });
     excl = Math.round(excl*100)/100;
+    var kortingBedrag = Math.round(excl * (kortingPct/100) * 100) / 100;
+    var exclNa = Math.round((excl - kortingBedrag) * 100) / 100;
     var btwTotaal = 0;
     Object.keys(perTarief).forEach(function(p){
-      perTarief[p].excl = Math.round(perTarief[p].excl*100)/100;
-      perTarief[p].btw  = Math.round(perTarief[p].excl * Number(p)) / 100;
+      // grondslag na korting, proportioneel
+      var na = Math.round(perTarief[p].excl * factor * 100) / 100;
+      perTarief[p].excl = na;
+      perTarief[p].btw  = Math.round(na * Number(p)) / 100;
       btwTotaal += perTarief[p].btw;
     });
     btwTotaal = Math.round(btwTotaal*100)/100;
-    var incl = Math.round((excl+btwTotaal)*100)/100;
-    return { excl:excl, btw:btwTotaal, incl:incl, perTarief:perTarief };
+    var incl = Math.round((exclNa+btwTotaal)*100)/100;
+    return { excl:excl, kortingPct:kortingPct, kortingBedrag:kortingBedrag, exclNa:exclNa, btw:btwTotaal, incl:incl, perTarief:perTarief };
   }
 
   // Btw-regels per tarief voor het totalenblok (hoog naar laag; 0% alleen als er 0%-regels zijn)
@@ -2156,9 +2164,24 @@
             '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Post toevoegen</button>'+
         '</div>'+
 
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:14px;">'+
+          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:2px;">Bonnen als bijlage</div>'+
+          '<div style="font-size:10.5px; color:var(--grijs); line-height:1.5; margin-bottom:12px;">Je kunt hier eventuele bonnen voor gedeclareerde aankopen uploaden zodat ze worden meegestuurd met de factuur, of je kunt deze zelf meesturen in de mail naar jouw klant.</div>'+
+          '<div id="f-bonnen-lijst" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;"></div>'+
+          '<button id="f-bon-kies" style="display:inline-flex; align-items:center; gap:6px; background:transparent; border:1px dashed var(--rand); color:var(--navy); border-radius:8px; font-size:12px; font-weight:600; padding:8px 13px; cursor:pointer;">'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Bon toevoegen</button>'+
+          '<input id="f-bon-file" type="file" accept="image/png,image/jpeg,application/pdf" multiple style="display:none;">'+
+          '<div style="font-size:10.5px; color:var(--grijs); margin-top:8px;">Let op: bonnen worden bij de factuur bewaard. Het daadwerkelijk meesturen gebeurt bij het versturen (volgende stap).</div>'+
+        '</div>'+
+
         '<div style="background:var(--navy); border-radius:12px; padding:16px 20px; display:flex; justify-content:flex-end; margin-bottom:14px;">'+
-          '<div style="width:260px;">'+
+          '<div style="width:290px;">'+
             '<div style="display:flex; justify-content:space-between; padding:3px 0; font-size:12.5px; color:#C7CEDA;"><span>Subtotaal (excl. btw)</span><span id="f-tot-excl" style="font-variant-numeric:tabular-nums;">'+eur(t.excl)+'</span></div>'+
+            '<div style="display:flex; justify-content:space-between; align-items:center; padding:5px 0; font-size:12.5px; color:#C7CEDA;">'+
+              '<span>Korting <input id="f-korting" type="number" value="'+(c.korting_pct||"")+'" placeholder="0" step="0.1" min="0" max="100" style="width:52px; padding:3px 6px; border:1px solid rgba(255,255,255,.3); border-radius:6px; font-size:12px; background:rgba(255,255,255,.1); color:#fff; text-align:right;"> %</span>'+
+              '<span id="f-tot-korting" style="font-variant-numeric:tabular-nums;">'+(t.kortingBedrag>0?"– "+eur(t.kortingBedrag):eur(0))+'</span>'+
+            '</div>'+
+            '<div id="f-tot-narow" style="display:'+(t.kortingBedrag>0?'flex':'none')+'; justify-content:space-between; padding:3px 0; font-size:12.5px; color:#C7CEDA; border-top:1px solid rgba(255,255,255,.15);"><span>Na korting (excl. btw)</span><span id="f-tot-exclna" style="font-variant-numeric:tabular-nums;">'+eur(t.exclNa)+'</span></div>'+
             '<div id="f-tot-btwregels">'+btwRegelsHtml(t)+'</div>'+
             '<div style="display:flex; justify-content:space-between; padding:6px 0 0; margin-top:4px; border-top:1px solid rgba(255,255,255,.2); font-size:15px; font-weight:700; color:#fff;"><span>Totaal</span><span id="f-tot-incl" style="font-variant-numeric:tabular-nums;">'+eur(t.incl)+'</span></div>'+
           '</div>'+
@@ -2200,10 +2223,12 @@
     function koppelRegels(containerId, klasse){
       Array.prototype.forEach.call(document.getElementById(containerId).querySelectorAll('.'+klasse), function(row){
         var i = parseInt(row.getAttribute('data-i'),10);
+        var totaalSpan = row.querySelector('span');   // de totaalweergave van deze regel
         Array.prototype.forEach.call(row.querySelectorAll('[data-veld]'), function(inp){
           inp.oninput = function(){
             var veld = inp.getAttribute('data-veld');
             c.regels[i][veld] = (veld==="aantal"||veld==="tarief"||veld==="btw_pct") ? (parseFloat(inp.value)||0) : inp.value;
+            if(totaalSpan){ totaalSpan.textContent = eur((Number(c.regels[i].aantal)||0)*(Number(c.regels[i].tarief)||0)); }
             werkTotalenBij();
           };
           inp.onchange = inp.oninput;   // ook voor de btw-select
@@ -2216,9 +2241,19 @@
     koppelRegels('f-reis-lijst','fr-reis');
     koppelRegels('f-mat-lijst','fr-mat');
 
+    // Korting-veld
+    document.getElementById('f-korting').oninput = function(){
+      c.korting_pct = parseFloat(this.value)||0;
+      werkTotalenBij();
+    };
+
     function werkTotalenBij(){
       var tt = factuurTotalen(c);
       document.getElementById('f-tot-excl').textContent = eur(tt.excl);
+      document.getElementById('f-tot-korting').textContent = tt.kortingBedrag>0 ? ("– "+eur(tt.kortingBedrag)) : eur(0);
+      var naRow = document.getElementById('f-tot-narow');
+      naRow.style.display = tt.kortingBedrag>0 ? 'flex' : 'none';
+      document.getElementById('f-tot-exclna').textContent = eur(tt.exclNa);
       document.getElementById('f-tot-btwregels').innerHTML = btwRegelsHtml(tt);
       document.getElementById('f-tot-incl').textContent = eur(tt.incl);
     }
@@ -2226,6 +2261,29 @@
     document.getElementById('f-uren-toevoegen').onclick = function(){ leesKop(); c.regels.push({soort:"uren", datum:c.factuurdatum||standaardDatum(), omschrijving:"", aantal:0, tarief:(c.uurtarief||0), btw_pct:21}); schermNieuweFactuur(); };
     document.getElementById('f-reis-toevoegen').onclick = function(){ leesKop(); c.regels.push({soort:"reis", datum:null, omschrijving:"", aantal:0, tarief:0, btw_pct:21}); schermNieuweFactuur(); };
     document.getElementById('f-mat-toevoegen').onclick  = function(){ leesKop(); c.regels.push({soort:"materiaal", datum:null, omschrijving:"", aantal:1, tarief:0, btw_pct:21}); schermNieuweFactuur(); };
+
+    // Bonnen (bijlagen). c.bonnen = lijst van {file?, naam, id?, bestand_pad?}
+    if(!c.bonnen) c.bonnen = [];
+    function tekenBonnen(){
+      var lijst = document.getElementById('f-bonnen-lijst');
+      if(!c.bonnen.length){ lijst.innerHTML = '<span style="font-size:11px; color:var(--grijs);">Nog geen bonnen toegevoegd.</span>'; return; }
+      lijst.innerHTML = c.bonnen.map(function(b, i){
+        return '<div style="display:flex; align-items:center; gap:7px; background:var(--papier); border:1px solid var(--rand); border-radius:7px; padding:6px 9px; font-size:11.5px; color:var(--navy);">'+
+          '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:14px;"><path d="M6 2h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/></svg>'+
+          '<span style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+ontsnap(b.naam||b.bestandsnaam||"bon")+'</span>'+
+          '<button data-bon="'+i+'" title="Verwijderen" style="background:none; border:none; color:var(--grijs); cursor:pointer; padding:0; display:flex;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="font-size:13px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>'+
+        '</div>';
+      }).join("");
+      Array.prototype.forEach.call(lijst.querySelectorAll('[data-bon]'), function(btn){
+        btn.onclick = function(){ c.bonnen.splice(parseInt(btn.getAttribute('data-bon'),10),1); tekenBonnen(); };
+      });
+    }
+    tekenBonnen();
+    document.getElementById('f-bon-kies').onclick = function(){ document.getElementById('f-bon-file').click(); };
+    document.getElementById('f-bon-file').onchange = function(){
+      Array.prototype.forEach.call(this.files, function(f){ c.bonnen.push({ file:f, naam:f.name }); });
+      tekenBonnen();
+    };
 
     document.getElementById('f-leeg').onclick = async function(){
       var ok = await fwBevestig("Deze concept-factuur leegmaken en opnieuw beginnen?", { okLabel:"Leegmaken", annuleerLabel:"Annuleren" });
@@ -2250,15 +2308,15 @@
 
   // Concept (factuur + regels) naar de database schrijven. Geeft null bij succes.
   async function bewaarConcept(c, regels){
-    var t = factuurTotalen({ regels:regels });
+    var t = factuurTotalen({ regels:regels, korting_pct:c.korting_pct });
     // Representatief btw-tarief voor de kop: het hoogste dat op de factuur voorkomt
     var tarieven = Object.keys(t.perTarief).map(Number);
     var kopBtw = tarieven.length ? Math.max.apply(null, tarieven) : 21;
     var kop = {
       administratie_id:curAdmin, user_id:user.id, klant_id:c.klant_id,
       factuurdatum:c.factuurdatum, omschrijving:c.omschrijving || null,
-      status:'concept', btw_pct:kopBtw,
-      totaal_excl:t.excl, totaal_btw:t.btw, totaal_incl:t.incl, bijgewerkt:new Date().toISOString()
+      status:'concept', btw_pct:kopBtw, korting_pct:(Number(c.korting_pct)||0),
+      totaal_excl:t.exclNa, totaal_btw:t.btw, totaal_incl:t.incl, bijgewerkt:new Date().toISOString()
     };
     var factuurId = c.id;
     if(factuurId){
@@ -2284,6 +2342,24 @@
     });
     var ri = await dbClient().from('adm_factuurregels').insert(regelRijen);
     if(ri.error) return ri.error.message;
+
+    // Nieuwe bonnen uploaden (die met een 'file'); bestaande blijven staan
+    if(c.bonnen && c.bonnen.length){
+      for(var i=0;i<c.bonnen.length;i++){
+        var b = c.bonnen[i];
+        if(b.file && !b.bestand_pad){
+          var ext = (b.file.name.split('.').pop() || 'bin').toLowerCase();
+          var pad = user.id + "/bon_" + factuurId + "_" + Date.now() + "_" + i + "." + ext;
+          var up = await dbClient().storage.from('adm-bestanden').upload(pad, b.file, { upsert:true });
+          if(up.error) return up.error.message;
+          var rb = await dbClient().from('adm_factuurbonnen').insert({
+            factuur_id:factuurId, user_id:user.id, bestand_pad:pad, bestandsnaam:b.naam || b.file.name
+          });
+          if(rb.error) return rb.error.message;
+          b.bestand_pad = pad; b.file = null;   // gemarkeerd als geüpload
+        }
+      }
+    }
     return null;
   }
 
