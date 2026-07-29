@@ -2189,7 +2189,8 @@
         '</div>'+
 
         '<div style="display:flex; gap:10px; align-items:center;">'+
-          '<button id="f-opslaan" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 20px; cursor:pointer;">Concept opslaan</button>'+
+          '<button id="f-opslaan" style="background:transparent; color:var(--navy); border:1px solid var(--navy); border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 20px; cursor:pointer;">Concept opslaan</button>'+
+          '<button id="f-voorbeeld" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 20px; cursor:pointer;">Voorbeeld &amp; definitief maken</button>'+
           '<button id="f-leeg" style="background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; padding:11px 16px; cursor:pointer;">Leegmaken</button>'+
           '<span id="f-status" style="font-size:11.5px; color:var(--groen);"></span>'+
         '</div>'+
@@ -2305,6 +2306,165 @@
       document.getElementById('f-status').textContent = "Concept opgeslagen ✓";
       setTimeout(function(){ var el=document.getElementById('f-status'); if(el) el.textContent=""; }, 2500);
     };
+
+    document.getElementById('f-voorbeeld').onclick = async function(){
+      leesKop();
+      if(!c.klant_id){ await fwMelding("Kies eerst een klant voor deze factuur."); return; }
+      var echteRegels = c.regels.filter(function(r){ return (Number(r.aantal)||0)>0 || (r.omschrijving||"").trim(); });
+      if(!echteRegels.length){ await fwMelding("Voeg minstens één regel met inhoud toe."); return; }
+      this.textContent = "Bezig…"; this.disabled = true;
+      // Eerst het concept opslaan, dan het voorbeeld tonen
+      var fout = await bewaarConcept(c, echteRegels);
+      this.textContent = "Voorbeeld & definitief maken"; this.disabled = false;
+      if(fout){ await fwMelding("Opslaan mislukt: " + fout); return; }
+      await toonFactuurVoorbeeld(c);
+    };
+  }
+
+  // Bedrijfsgegevens + klant samenstellen voor de PDF
+  async function factuurPayload(c){
+    var a = admins[curAdmin] || {};
+    var klant = null;
+    if(c.klant_id){
+      var k = await dbClient().from('adm_klanten').select('*').eq('id', c.klant_id).single();
+      if(!k.error) klant = k.data;
+    }
+    var logo_base64 = null;
+    if(a.logo_pad){
+      try {
+        var s = await dbClient().storage.from('adm-bestanden').createSignedUrl(a.logo_pad, 120);
+        if(s.data && s.data.signedUrl){
+          var resp = await fetch(s.data.signedUrl);
+          var blob = await resp.blob();
+          logo_base64 = await new Promise(function(res){ var r=new FileReader(); r.onloadend=function(){res(r.result);}; r.readAsDataURL(blob); });
+        }
+      } catch(e){}
+    }
+    return {
+      bedrijf:{ naam:a.naam, adres:a.adres, postcode:a.postcode, plaats:a.plaats, email:a.email, telefoon:a.telefoon, iban:a.iban, kvk:a.kvk, btw:a.btw_nummer },
+      klant: klant ? { naam:klant.naam, adres:klant.adres, postcode:klant.postcode, plaats:klant.plaats, email:klant.email } : {},
+      factuurnummer: c.factuurnummer || null,
+      factuurdatum: c.factuurdatum,
+      omschrijving: c.omschrijving,
+      korting_pct: c.korting_pct || 0,
+      regels: c.regels.filter(function(r){ return (Number(r.aantal)||0)>0 || (r.omschrijving||"").trim(); }),
+      logo_base64: logo_base64
+    };
+  }
+
+  async function haalFactuurPdf(payload){
+    var r = await fetch("/api/factuurpdf", { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify(payload) });
+    if(!r.ok){ var t=""; try{ t=(await r.json()).error||""; }catch(e){} throw new Error(t||("serverfout "+r.status)); }
+    return await r.blob();
+  }
+
+  // Voorbeeldvenster met de PDF en de knop 'Definitief maken'
+  async function toonFactuurVoorbeeld(c){
+    var overlay = document.createElement('div');
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.55); display:flex; align-items:center; justify-content:center; z-index:2100; padding:16px;";
+    var box = document.createElement('div');
+    box.style.cssText = "width:100%; max-width:720px; height:90vh; background:var(--papier); border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.3); display:flex; flex-direction:column; overflow:hidden;";
+    var isDefinitief = (c.status === 'definitief');
+    box.innerHTML =
+      '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; display:flex; align-items:center; justify-content:space-between;">'+
+        '<span style="font-size:13px; font-weight:700; color:#fff;">Factuurvoorbeeld</span>'+
+        '<button id="fv-sluit" style="background:none; border:none; color:#fff; cursor:pointer; font-size:18px; padding:0 4px;">&times;</button>'+
+      '</div>'+
+      '<div id="fv-body" style="flex:1; overflow:auto; background:#525659; display:flex; align-items:center; justify-content:center;"><div style="color:#fff; font-size:12px; padding:40px;">Voorbeeld laden…</div></div>'+
+      '<div style="padding:12px 18px; background:var(--papier); border-top:1px solid var(--rand); display:flex; gap:10px; align-items:center;">'+
+        (isDefinitief
+          ? '<span style="font-size:12px; color:var(--groen); font-weight:600;">Deze factuur is definitief (nr. '+ontsnap(c.factuurnummer||"")+') en als omzet geboekt.</span>'
+          : '<button id="fv-definitief" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 18px; cursor:pointer;">Akkoord — definitief maken</button>'
+          )+
+        '<button id="fv-download" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 16px; cursor:pointer;">PDF downloaden</button>'+
+        '<span id="fv-status" style="font-size:11.5px; color:var(--grijs); flex:1;"></span>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function sluit(){ if(overlay.parentNode) document.body.removeChild(overlay); }
+    document.getElementById('fv-sluit').onclick = sluit;
+
+    // PDF ophalen en tonen
+    var pdfBlob = null;
+    try {
+      var payload = await factuurPayload(c);
+      pdfBlob = await haalFactuurPdf(payload);
+      var url = URL.createObjectURL(pdfBlob);
+      document.getElementById('fv-body').innerHTML = '<iframe src="'+url+'" style="width:100%; height:100%; border:none; background:#fff;"></iframe>';
+    } catch(e){
+      document.getElementById('fv-body').innerHTML = '<div style="color:#fff; font-size:12px; padding:40px;">Kon voorbeeld niet laden: '+ontsnap(e.message||e)+'</div>';
+    }
+
+    document.getElementById('fv-download').onclick = function(){
+      if(!pdfBlob) return;
+      var a = document.createElement('a'); a.href = URL.createObjectURL(pdfBlob);
+      a.download = "factuur_"+(c.factuurnummer||"concept")+".pdf"; document.body.appendChild(a); a.click(); a.remove();
+    };
+
+    var defBtn = document.getElementById('fv-definitief');
+    if(defBtn){
+      defBtn.onclick = async function(){
+        var ok = await fwBevestig("Deze factuur definitief maken?\n\nDe factuur krijgt een definitief factuurnummer en wordt direct als omzet in je administratie geboekt. Dit kan niet worden teruggedraaid.", { okLabel:"Definitief maken", annuleerLabel:"Annuleren" });
+        if(!ok) return;
+        defBtn.textContent = "Bezig…"; defBtn.disabled = true;
+        var fout = await maakDefinitief(c);
+        if(fout){ await fwMelding("Definitief maken mislukt: " + fout); defBtn.textContent="Akkoord — definitief maken"; defBtn.disabled=false; return; }
+        sluit();
+        await fwMelding("Factuur "+c.factuurnummer+" is definitief gemaakt en als omzet geboekt.");
+        factuurConcept = null;
+        curItem = "overzicht"; renderNav(); await renderScherm();
+      };
+    }
+  }
+
+  // Volgend factuurnummer: datum-voorvoegsel (ddmmjjjj) + doorlopend volgnr per jaar
+  async function volgendFactuurnummer(datum){
+    var d = datum ? new Date(datum) : new Date();
+    var jaar = d.getFullYear();
+    var a = await dbClient().from('adm_administraties').select('factuur_teller, factuur_teller_jaar').eq('id', curAdmin).single();
+    if(a.error) throw new Error(a.error.message);
+    var teller = a.data.factuur_teller || 0;
+    var tellerJaar = a.data.factuur_teller_jaar;
+    if(tellerJaar !== jaar){ teller = 0; }   // nieuw jaar → reset
+    teller += 1;
+    var u = await dbClient().from('adm_administraties').update({ factuur_teller:teller, factuur_teller_jaar:jaar }).eq('id', curAdmin);
+    if(u.error) throw new Error(u.error.message);
+    var dd = String(d.getDate()).padStart(2,'0');
+    var mm = String(d.getMonth()+1).padStart(2,'0');
+    var volg = String(teller).padStart(3,'0');
+    return dd+mm+jaar+"-"+volg;
+  }
+
+  // Factuur definitief maken: nummer, status, en omzetboeking. Geeft null bij succes.
+  async function maakDefinitief(c){
+    try {
+      if(!c.id){ return "De factuur is nog niet opgeslagen."; }
+      var nummer = await volgendFactuurnummer(c.factuurdatum);
+      var t = factuurTotalen(c);
+
+      // Omzetboeking aanmaken (netto excl. btw, totale btw over de factuur)
+      var klantNaam = "";
+      if(c.klant_id){ var k = await dbClient().from('adm_klanten').select('naam').eq('id', c.klant_id).single(); if(!k.error) klantNaam = k.data.naam; }
+      var boeking = {
+        administratie_id:curAdmin, user_id:user.id, soort:'omzet',
+        datum:c.factuurdatum, naam:klantNaam || 'Factuur',
+        omschrijving:'Factuur '+nummer+(c.omschrijving?' — '+c.omschrijving:''),
+        bedrag_excl:t.exclNa, btw_bedrag:t.btw, bedrag_incl:t.incl,
+        btw_pct:(function(){ var ps=Object.keys(t.perTarief).map(Number); return ps.length?Math.max.apply(null,ps):21; })(),
+        bron:'factuur'
+      };
+      var ins = await dbClient().from('adm_boekingen').insert(boeking).select().single();
+      if(ins.error) return ins.error.message;
+
+      // Factuur bijwerken: definitief + nummer + koppeling aan de boeking
+      var u = await dbClient().from('adm_facturen').update({
+        status:'definitief', factuurnummer:nummer, boeking_id:ins.data.id, bijgewerkt:new Date().toISOString()
+      }).eq('id', c.id);
+      if(u.error) return u.error.message;
+
+      c.status = 'definitief'; c.factuurnummer = nummer;
+      return null;
+    } catch(e){ return String(e.message||e); }
   }
 
   // Concept (factuur + regels) naar de database schrijven. Geeft null bij succes.
