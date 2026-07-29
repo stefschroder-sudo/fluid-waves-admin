@@ -1434,6 +1434,7 @@
       else if(curItem === "klanten"){ await schermKlanten(); }
       else if(curItem === "nieuw"){ await schermNieuweFactuur(); }
       else { await schermFacturenPlaceholder(); }
+      toonFactuurUitleg();
       return;
     }
 
@@ -1786,6 +1787,21 @@
   }
 
   // ── Facturen: mijn bedrijfsgegevens ──────────────────────────────────────
+  // Wegklikbare uitleg boven de Facturen-schermen (per sessie onthouden)
+  var factuurUitlegWeg = false;
+  function toonFactuurUitleg(){
+    if(factuurUitlegWeg) return;
+    var banner = document.createElement('div');
+    banner.style.cssText = "position:relative; max-width:760px; background:#FBF6E6; border:1px solid var(--goud); border-radius:10px; padding:13px 40px 13px 16px; margin-bottom:16px; font-size:11.5px; color:var(--navy); line-height:1.5;";
+    banner.innerHTML =
+      '<b>Facturen maken.</b> Stel hier je bedrijfsgegevens en klanten in, en maak een factuur op met werkuren, reiskosten en overige declaraties. '+
+      'Je slaat een factuur eerst op als concept en kunt hem rustig aanpassen. Zodra je hem definitief maakt en akkoord geeft, wordt hij '+
+      '<b>direct als omzet in je administratie opgenomen</b> en krijgt hij zijn factuurnummer.'+
+      '<button id="fu-sluit" title="Sluiten" style="position:absolute; top:8px; right:8px; background:none; border:none; color:var(--goud); cursor:pointer; padding:4px; display:flex;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>';
+    schermEl.insertBefore(banner, schermEl.firstChild);
+    document.getElementById('fu-sluit').onclick = function(){ factuurUitlegWeg = true; banner.remove(); };
+  }
+
   async function schermBedrijf(){
     var a = admins[curAdmin] || {};
     function veldRij(label, id, val, ph, breedte){
@@ -1991,7 +2007,7 @@
   function nieuwConcept(){
     return {
       id:null, klant_id:null, factuurdatum:standaardDatum(),
-      omschrijving:"", status:"concept",
+      omschrijving:"", status:"concept", uurtarief:0,
       regels:[ {soort:"uren", datum:standaardDatum(), omschrijving:"", aantal:0, tarief:0, btw_pct:21} ]
     };
   }
@@ -2059,7 +2075,7 @@
     }
     function matRegel(r, i){
       return '<div class="fr-mat" data-i="'+i+'" style="display:flex; gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--rand-licht);">'+
-        '<input type="text" data-veld="omschrijving" value="'+(r.omschrijving||"").replace(/"/g,"&quot;")+'" placeholder="Materiaal of product" style="flex:1; padding:7px 9px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit);">'+
+        '<input type="text" data-veld="omschrijving" value="'+(r.omschrijving||"").replace(/"/g,"&quot;")+'" placeholder="Materiaal, product of declaratie" style="flex:1; padding:7px 9px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit);">'+
         '<input type="number" data-veld="aantal" value="'+(r.aantal||"")+'" placeholder="aantal" step="1" style="width:66px; padding:7px 8px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit); text-align:right;">'+
         '<input type="number" data-veld="tarief" value="'+(r.tarief||"")+'" placeholder="prijs" step="0.01" style="width:78px; padding:7px 8px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit); text-align:right;">'+
         btwSel(r)+
@@ -2067,8 +2083,19 @@
         '<button data-verwijder="'+i+'" title="Regel verwijderen" style="background:none; border:none; color:var(--grijs); cursor:pointer; padding:2px; display:flex;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>'+
       '</div>';
     }
+    function reisRegel(r, i){
+      return '<div class="fr-reis" data-i="'+i+'" style="display:flex; gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--rand-licht);">'+
+        '<input type="text" data-veld="omschrijving" value="'+(r.omschrijving||"").replace(/"/g,"&quot;")+'" placeholder="bijv. kilometervergoeding" style="flex:1; padding:7px 9px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit);">'+
+        '<input type="number" data-veld="aantal" value="'+(r.aantal||"")+'" placeholder="km" step="1" style="width:66px; padding:7px 8px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit); text-align:right;">'+
+        '<input type="number" data-veld="tarief" value="'+(r.tarief||"")+'" placeholder="tarief" step="0.01" style="width:78px; padding:7px 8px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit); text-align:right;">'+
+        btwSel(r)+
+        '<span style="width:82px; text-align:right; font-size:12px; color:var(--navy); font-weight:600;">'+eur((Number(r.aantal)||0)*(Number(r.tarief)||0))+'</span>'+
+        '<button data-verwijder="'+i+'" title="Regel verwijderen" style="background:none; border:none; color:var(--grijs); cursor:pointer; padding:2px; display:flex;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>'+
+      '</div>';
+    }
 
     var urenRegels = c.regels.map(function(r,i){ return r.soort==="uren" ? urenRegel(r,i) : ""; }).join("");
+    var reisRegels = c.regels.map(function(r,i){ return r.soort==="reis" ? reisRegel(r,i) : ""; }).join("");
     var matRegels  = c.regels.map(function(r,i){ return r.soort==="materiaal" ? matRegel(r,i) : ""; }).join("");
 
     schermEl.innerHTML =
@@ -2093,6 +2120,14 @@
 
         '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:14px;">'+
           '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:2px;">Werkuren</div>'+
+          '<div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin:8px 0 12px; padding:10px 12px; background:var(--papier); border-radius:8px;">'+
+            '<div style="width:140px;">'+
+              '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Uurtarief</label>'+
+              '<input id="f-uurtarief" type="number" value="'+(c.uurtarief||"")+'" placeholder="bijv. 75" step="0.01" style="width:100%; padding:8px 10px; border:1px solid var(--rand); border-radius:7px; font-size:12.5px; background:var(--wit); text-align:right;">'+
+            '</div>'+
+            '<button id="f-uurtarief-vul" style="padding:8px 14px; background:var(--navy); color:var(--papier); border:none; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer;">Toepassen op urenregels</button>'+
+            '<span style="flex:1; min-width:180px; font-size:10.5px; color:var(--grijs); line-height:1.4;">Vul hier het tarief voor deze klant in en klik om alle urenregels ermee te vullen. Je kunt het tarief per regel daarna nog aanpassen.</span>'+
+          '</div>'+
           '<div style="display:flex; gap:8px; font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--grijs); padding-bottom:2px;">'+
             '<span style="width:135px;">Datum</span><span style="flex:1;">Werkzaamheden</span><span style="width:66px; text-align:right;">Uren</span><span style="width:78px; text-align:right;">Tarief</span><span style="width:64px; text-align:center;">Btw</span><span style="width:82px; text-align:right;">Totaal</span><span style="width:19px;"></span>'+
           '</div>'+
@@ -2102,13 +2137,23 @@
         '</div>'+
 
         '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:14px;">'+
-          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:2px;">Materialen</div>'+
+          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:2px;">Reiskosten</div>'+
+          '<div style="display:flex; gap:8px; font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--grijs); padding-bottom:2px;">'+
+            '<span style="flex:1;">Omschrijving</span><span style="width:66px; text-align:right;">Aantal</span><span style="width:78px; text-align:right;">Tarief</span><span style="width:64px; text-align:center;">Btw</span><span style="width:82px; text-align:right;">Totaal</span><span style="width:19px;"></span>'+
+          '</div>'+
+          '<div id="f-reis-lijst">'+(reisRegels||'<div style="padding:8px 0; font-size:11.5px; color:var(--grijs);">Nog geen reiskosten.</div>')+'</div>'+
+          '<button id="f-reis-toevoegen" style="margin-top:10px; display:inline-flex; align-items:center; gap:6px; background:transparent; border:1px dashed var(--rand); color:var(--navy); border-radius:8px; font-size:12px; font-weight:600; padding:8px 13px; cursor:pointer;">'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Reiskostenregel toevoegen</button>'+
+        '</div>'+
+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:14px;">'+
+          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:2px;">Materialen en diverse overige declaraties</div>'+
           '<div style="display:flex; gap:8px; font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--grijs); padding-bottom:2px;">'+
             '<span style="flex:1;">Omschrijving</span><span style="width:66px; text-align:right;">Aantal</span><span style="width:78px; text-align:right;">Prijs</span><span style="width:64px; text-align:center;">Btw</span><span style="width:82px; text-align:right;">Totaal</span><span style="width:19px;"></span>'+
           '</div>'+
-          '<div id="f-mat-lijst">'+(matRegels||'<div style="padding:8px 0; font-size:11.5px; color:var(--grijs);">Nog geen materialen.</div>')+'</div>'+
+          '<div id="f-mat-lijst">'+(matRegels||'<div style="padding:8px 0; font-size:11.5px; color:var(--grijs);">Nog geen posten.</div>')+'</div>'+
           '<button id="f-mat-toevoegen" style="margin-top:10px; display:inline-flex; align-items:center; gap:6px; background:transparent; border:1px dashed var(--rand); color:var(--navy); border-radius:8px; font-size:12px; font-weight:600; padding:8px 13px; cursor:pointer;">'+
-            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Materiaal toevoegen</button>'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Post toevoegen</button>'+
         '</div>'+
 
         '<div style="background:var(--navy); border-radius:12px; padding:16px 20px; display:flex; justify-content:flex-end; margin-bottom:14px;">'+
@@ -2132,16 +2177,28 @@
       c.klant_id = document.getElementById('f-klant').value || null;
       c.factuurdatum = document.getElementById('f-datum').value || null;
       c.omschrijving = document.getElementById('f-omschrijving').value;
+      var ut = document.getElementById('f-uurtarief');
+      if(ut) c.uurtarief = parseFloat(ut.value)||0;
     }
     document.getElementById('f-klant').onchange = leesKop;
     document.getElementById('f-datum').onchange = leesKop;
     document.getElementById('f-omschrijving').oninput = leesKop;
+    document.getElementById('f-uurtarief').oninput = leesKop;
 
     document.getElementById('f-klant-nieuw').onclick = function(){ leesKop(); klantVenster(null); };
 
-    // Regelvelden koppelen
-    function koppelRegels(containerId, soort){
-      Array.prototype.forEach.call(document.getElementById(containerId).querySelectorAll(soort==="uren"?'.fr-uren':'.fr-mat'), function(row){
+    // Uurtarief toepassen op alle urenregels
+    document.getElementById('f-uurtarief-vul').onclick = function(){
+      leesKop();
+      var tarief = c.uurtarief || 0;
+      if(!tarief){ fwMelding("Vul eerst een uurtarief in."); return; }
+      c.regels.forEach(function(r){ if(r.soort==="uren") r.tarief = tarief; });
+      schermNieuweFactuur();
+    };
+
+    // Regelvelden koppelen (per regelklasse)
+    function koppelRegels(containerId, klasse){
+      Array.prototype.forEach.call(document.getElementById(containerId).querySelectorAll('.'+klasse), function(row){
         var i = parseInt(row.getAttribute('data-i'),10);
         Array.prototype.forEach.call(row.querySelectorAll('[data-veld]'), function(inp){
           inp.oninput = function(){
@@ -2155,8 +2212,9 @@
         if(vbtn){ vbtn.onclick = function(){ c.regels.splice(i,1); schermNieuweFactuur(); }; }
       });
     }
-    koppelRegels('f-uren-lijst','uren');
-    koppelRegels('f-mat-lijst','materiaal');
+    koppelRegels('f-uren-lijst','fr-uren');
+    koppelRegels('f-reis-lijst','fr-reis');
+    koppelRegels('f-mat-lijst','fr-mat');
 
     function werkTotalenBij(){
       var tt = factuurTotalen(c);
@@ -2165,7 +2223,8 @@
       document.getElementById('f-tot-incl').textContent = eur(tt.incl);
     }
 
-    document.getElementById('f-uren-toevoegen').onclick = function(){ leesKop(); c.regels.push({soort:"uren", datum:c.factuurdatum||standaardDatum(), omschrijving:"", aantal:0, tarief:0, btw_pct:21}); schermNieuweFactuur(); };
+    document.getElementById('f-uren-toevoegen').onclick = function(){ leesKop(); c.regels.push({soort:"uren", datum:c.factuurdatum||standaardDatum(), omschrijving:"", aantal:0, tarief:(c.uurtarief||0), btw_pct:21}); schermNieuweFactuur(); };
+    document.getElementById('f-reis-toevoegen').onclick = function(){ leesKop(); c.regels.push({soort:"reis", datum:null, omschrijving:"", aantal:0, tarief:0, btw_pct:21}); schermNieuweFactuur(); };
     document.getElementById('f-mat-toevoegen').onclick  = function(){ leesKop(); c.regels.push({soort:"materiaal", datum:null, omschrijving:"", aantal:1, tarief:0, btw_pct:21}); schermNieuweFactuur(); };
 
     document.getElementById('f-leeg').onclick = async function(){
