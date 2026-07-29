@@ -1431,6 +1431,7 @@
 
     if(curView === "facturen"){
       if(curItem === "bedrijf"){ await schermBedrijf(); }
+      else if(curItem === "klanten"){ await schermKlanten(); }
       else { await schermFacturenPlaceholder(); }
       return;
     }
@@ -1865,6 +1866,121 @@
       document.getElementById('bd-status').textContent = "Opgeslagen ✓";
       setTimeout(function(){ var el=document.getElementById('bd-status'); if(el) el.textContent=""; }, 2500);
     };
+  }
+
+  // ── Facturen: klantenlijst ───────────────────────────────────────────────
+  async function laadKlanten(){
+    if(!curAdmin) return [];
+    var r = await dbClient().from('adm_klanten').select('*').eq('administratie_id', curAdmin).order('naam');
+    if(r.error){ console.error(r.error); return []; }
+    return r.data;
+  }
+
+  async function schermKlanten(){
+    var klanten = await laadKlanten();
+
+    var rijen = "";
+    if(!klanten.length){
+      rijen = '<div style="padding:28px; text-align:center; color:var(--grijs); font-size:12.5px;">Nog geen klanten. Voeg je eerste klant toe om te kunnen factureren.</div>';
+    } else {
+      klanten.forEach(function(k){
+        var plaats = [k.postcode, k.plaats].filter(Boolean).join(" ");
+        var regel2 = [k.adres, plaats].filter(Boolean).join(" · ");
+        rijen +=
+          '<div class="kl-rij" data-id="'+k.id+'" style="display:flex; align-items:center; gap:12px; padding:11px 14px; border-top:1px solid var(--rand-licht); cursor:pointer;">'+
+            '<div style="width:32px; height:32px; border-radius:7px; background:var(--papier); color:var(--navy); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0;">'+ontsnap(initialen(k.naam))+'</div>'+
+            '<div style="flex:1; min-width:0;">'+
+              '<div style="font-size:12.5px; font-weight:600; color:var(--navy); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'+ontsnap(k.naam)+'</div>'+
+              (regel2?'<div style="font-size:11px; color:var(--grijs); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'+ontsnap(regel2)+'</div>':'')+
+            '</div>'+
+            (k.email?'<div style="font-size:11px; color:var(--grijs);">'+ontsnap(k.email)+'</div>':'')+
+          '</div>';
+      });
+    }
+
+    schermEl.innerHTML =
+      '<div style="max-width:680px;">'+
+        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">'+
+          '<div style="font-size:12px; color:var(--grijs);">Je klanten voor op de facturen. Klik een klant aan om te bewerken.</div>'+
+          '<button id="kl-nieuw" style="display:inline-flex; align-items:center; gap:7px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:9px 15px; cursor:pointer;">'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Nieuwe klant</button>'+
+        '</div>'+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; overflow:hidden;">'+rijen+'</div>'+
+      '</div>';
+
+    document.getElementById('kl-nieuw').onclick = function(){ klantVenster(null); };
+    Array.prototype.forEach.call(schermEl.querySelectorAll('.kl-rij'), function(row){
+      row.onclick = function(){
+        var k = klanten.filter(function(x){ return x.id === row.getAttribute('data-id'); })[0];
+        if(k) klantVenster(k);
+      };
+    });
+  }
+
+  // Venster om een klant toe te voegen of te bewerken
+  function klantVenster(klant){
+    var nieuw = !klant;
+    klant = klant || {};
+    var overlay = document.createElement('div');
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2100; padding:20px;";
+    var box = document.createElement('div');
+    box.style.cssText = "width:100%; max-width:460px; max-height:88vh; overflow:auto; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25);";
+    function inp(id, val, ph){ return '<input id="'+id+'" type="text" value="'+(val||"").replace(/"/g,"&quot;")+'" placeholder="'+(ph||"")+'" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit);">'; }
+    function lbl(t){ return '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px; margin-top:11px;">'+t+'</label>'; }
+    box.innerHTML =
+      '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; font-size:13px; font-weight:700; color:#FFFFFF; position:sticky; top:0;">'+(nieuw?"Nieuwe klant":"Klant bewerken")+'</div>'+
+      '<div style="padding:18px;">'+
+        lbl("Naam")+ inp("kl-naam", klant.naam, "Bedrijf of persoon")+
+        lbl("Adres")+ inp("kl-adres", klant.adres, "Straat en huisnummer")+
+        '<div style="display:flex; gap:10px;">'+
+          '<div style="width:38%;">'+lbl("Postcode")+inp("kl-postcode", klant.postcode, "1234 AB")+'</div>'+
+          '<div style="flex:1;">'+lbl("Plaats")+inp("kl-plaats", klant.plaats)+'</div>'+
+        '</div>'+
+        lbl("E-mail")+ inp("kl-email", klant.email, "naam@bedrijf.nl")+
+        '<div style="display:flex; gap:8px; align-items:center; margin-top:18px;">'+
+          '<button id="kl-opslaan" style="padding:9px 16px; background:var(--navy); border:1px solid var(--navy); color:var(--papier); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Opslaan</button>'+
+          '<button id="kl-annuleer" style="padding:9px 16px; background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; cursor:pointer;">Annuleren</button>'+
+          (nieuw?'':'<button id="kl-verwijder" style="margin-left:auto; padding:9px 16px; background:transparent; border:1px solid var(--rood); color:var(--rood); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Verwijderen</button>')+
+        '</div>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function sluit(){ document.body.removeChild(overlay); }
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) sluit(); });
+
+    document.getElementById('kl-annuleer').onclick = sluit;
+
+    document.getElementById('kl-opslaan').onclick = async function(){
+      var naam = document.getElementById('kl-naam').value.trim();
+      if(!naam){ await fwMelding("Geef de klant een naam."); return; }
+      this.textContent = "Bezig…"; this.disabled = true;
+      var g = function(x){ return document.getElementById(x).value.trim() || null; };
+      var rec = {
+        naam:naam, adres:g('kl-adres'), postcode:g('kl-postcode'),
+        plaats:g('kl-plaats'), email:g('kl-email')
+      };
+      var r;
+      if(nieuw){
+        rec.user_id = user.id; rec.administratie_id = curAdmin;
+        r = await dbClient().from('adm_klanten').insert(rec);
+      } else {
+        r = await dbClient().from('adm_klanten').update(rec).eq('id', klant.id);
+      }
+      if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
+      sluit();
+      await schermKlanten();
+    };
+
+    if(!nieuw){
+      document.getElementById('kl-verwijder').onclick = async function(){
+        sluit();
+        var ok = await fwBevestig("Klant \""+klant.naam+"\" verwijderen?\n\nBestaande facturen aan deze klant blijven bestaan.", { okLabel:"Verwijderen", annuleerLabel:"Annuleren" });
+        if(!ok) return;
+        var r = await dbClient().from('adm_klanten').delete().eq('id', klant.id);
+        if(r.error){ await fwMelding("Verwijderen mislukt: " + r.error.message); return; }
+        await schermKlanten();
+      };
+    }
   }
 
   async function schermFacturenPlaceholder(){
