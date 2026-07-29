@@ -123,6 +123,7 @@
     <div class="fw-top" data-view="ib" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>IB-aangifte</div>
     <div class="fw-top" data-view="resultaat" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 19h16M4 15l4-6 4 3 4-8"/></svg>Resultaat</div>
     <div class="fw-top" data-view="belasting" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 11h.01M15 11h.01"/></svg>Belastingregels</div>
+    <div class="fw-top" data-view="facturen" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M6 2h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>Facturen</div>
   </div>
 
   <div style="display:flex;">
@@ -471,6 +472,15 @@
         {id:"regels",    icon:"file-text", label:"Actuele regels",  groep:"Informatie"},
         {id:"instellingen", icon:"settings", label:"Instellingen",  groep:"Informatie"}
       ]
+    },
+    facturen: {
+      titel:"Facturen", actie:null,
+      items:[
+        {id:"nieuw",     icon:"file-plus",  label:"Nieuwe factuur",   groep:"Factureren"},
+        {id:"overzicht", icon:"files",      label:"Mijn facturen",    groep:"Factureren"},
+        {id:"klanten",   icon:"users",      label:"Klanten",          groep:"Beheer"},
+        {id:"bedrijf",   icon:"building",   label:"Mijn bedrijfsgegevens", groep:"Beheer"}
+      ]
     }
   };
 
@@ -593,30 +603,6 @@
           '<div style="flex:1;">'+lbl("Btw-nummer")+inp("bh-btw", a.btw_nummer, "NL001234567B01")+'</div>'+
         '</div>'+
 
-        '<div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--rand-licht);">'+
-          '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700; margin-bottom:2px;">Bedrijfsgegevens voor facturen</div>'+
-          '<div style="font-size:10.5px; color:var(--grijs);">Deze gegevens verschijnen op je facturen.</div>'+
-          lbl("Adres")+ inp("bh-adres", a.adres, "Straat en huisnummer")+
-          '<div style="display:flex; gap:10px;">'+
-            '<div style="width:38%;">'+lbl("Postcode")+inp("bh-postcode", a.postcode, "1234 AB")+'</div>'+
-            '<div style="flex:1;">'+lbl("Plaats")+inp("bh-plaats", a.plaats)+'</div>'+
-          '</div>'+
-          '<div style="display:flex; gap:10px;">'+
-            '<div style="flex:1;">'+lbl("E-mail")+inp("bh-email", a.email, "naam@bedrijf.nl")+'</div>'+
-            '<div style="flex:1;">'+lbl("Telefoon")+inp("bh-telefoon", a.telefoon)+'</div>'+
-          '</div>'+
-          lbl("IBAN")+ inp("bh-iban", a.iban, "NL00 BANK 0123 4567 89")+
-          lbl("Logo")+
-          '<div style="display:flex; gap:10px; align-items:center;">'+
-            '<div id="bh-logo-preview" style="width:52px; height:52px; border-radius:8px; border:1px solid var(--rand); background:var(--wit) center/contain no-repeat; flex-shrink:0;'+(a.logo_pad?'':'')+'"></div>'+
-            '<div style="flex:1;">'+
-              '<button id="bh-logo-kies" style="padding:7px 12px; background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;">Logo kiezen</button>'+
-              '<span id="bh-logo-naam" style="font-size:10.5px; color:var(--grijs); margin-left:8px;">'+(a.logo_pad?"logo aanwezig":"geen logo")+'</span>'+
-              '<input id="bh-logo-file" type="file" accept="image/png,image/jpeg" style="display:none;">'+
-            '</div>'+
-          '</div>'+
-        '</div>'+
-
         '<div style="display:flex; gap:8px; align-items:center; margin-top:18px;">'+
           '<button id="bh-opslaan" style="padding:9px 16px; background:var(--navy); border:1px solid var(--navy); color:var(--papier); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Opslaan</button>'+
           '<button id="bh-annuleer" style="padding:9px 16px; background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; cursor:pointer;">Annuleren</button>'+
@@ -637,51 +623,13 @@
 
     document.getElementById('bh-annuleer').onclick = sluit;
 
-    // Logo tonen indien aanwezig
-    var gekozenLogo = null;
-    (async function(){
-      if(a.logo_pad){
-        try {
-          var s = await dbClient().storage.from('adm-bestanden').createSignedUrl(a.logo_pad, 120);
-          if(s.data && s.data.signedUrl){
-            document.getElementById('bh-logo-preview').style.backgroundImage = "url('"+s.data.signedUrl+"')";
-          }
-        } catch(e){}
-      }
-    })();
-    document.getElementById('bh-logo-kies').onclick = function(){ document.getElementById('bh-logo-file').click(); };
-    document.getElementById('bh-logo-file').onchange = function(){
-      if(this.files[0]){
-        gekozenLogo = this.files[0];
-        document.getElementById('bh-logo-naam').textContent = gekozenLogo.name;
-        var reader = new FileReader();
-        reader.onload = function(e){ document.getElementById('bh-logo-preview').style.backgroundImage = "url('"+e.target.result+"')"; };
-        reader.readAsDataURL(gekozenLogo);
-      }
-    };
-
     document.getElementById('bh-opslaan').onclick = async function(){
       var naam = document.getElementById('bh-naam').value.trim();
       if(!naam){ await fwMelding("Geef de administratie een naam."); return; }
       this.textContent = "Bezig…"; this.disabled = true;
-
-      // Logo uploaden indien gekozen
-      var logoPad = a.logo_pad;
-      if(gekozenLogo){
-        var ext = (gekozenLogo.name.split('.').pop() || 'png').toLowerCase();
-        var pad = user.id + "/logo_" + id + "_" + Date.now() + "." + ext;
-        var up = await dbClient().storage.from('adm-bestanden').upload(pad, gekozenLogo, { upsert:true });
-        if(up.error){ await fwMelding("Logo uploaden mislukt: " + up.error.message); this.textContent="Opslaan"; this.disabled=false; return; }
-        logoPad = pad;
-      }
-
       var g = function(x){ return document.getElementById(x).value.trim() || null; };
       var r = await dbClient().from('adm_administraties').update({
-        naam:naam,
-        kvk:g('bh-kvk'), btw_nummer:g('bh-btw'),
-        adres:g('bh-adres'), postcode:g('bh-postcode'), plaats:g('bh-plaats'),
-        email:g('bh-email'), telefoon:g('bh-telefoon'), iban:g('bh-iban'),
-        logo_pad:logoPad
+        naam:naam, kvk:g('bh-kvk'), btw_nummer:g('bh-btw')
       }).eq('id', id);
       if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
       sluit();
@@ -1481,6 +1429,12 @@
       return;
     }
 
+    if(curView === "facturen"){
+      if(curItem === "bedrijf"){ await schermBedrijf(); }
+      else { await schermFacturenPlaceholder(); }
+      return;
+    }
+
     // Overige schermen: nog leeg
     schermEl.innerHTML =
       '<div class="fw-leeg">'+
@@ -1829,6 +1783,100 @@
     });
   }
 
+  // ── Facturen: mijn bedrijfsgegevens ──────────────────────────────────────
+  async function schermBedrijf(){
+    var a = admins[curAdmin] || {};
+    function veldRij(label, id, val, ph, breedte){
+      return '<div style="'+(breedte?"width:"+breedte+";":"flex:1;")+'">'+
+        '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">'+label+'</label>'+
+        '<input id="'+id+'" type="text" value="'+(val||"").replace(/"/g,"&quot;")+'" placeholder="'+(ph||"")+'" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit);"></div>';
+    }
+
+    schermEl.innerHTML =
+      '<div style="max-width:640px;">'+
+        '<div style="background:#FBF6E6; border:1px solid var(--goud); border-radius:10px; padding:12px 16px; margin-bottom:18px; font-size:11.5px; color:var(--navy); line-height:1.5;">'+
+          'Deze gegevens verschijnen bovenaan je facturen. Vul ze eenmalig in; je kunt ze altijd aanpassen. '+
+          'Ze horen bij deze administratie ('+(a.naam||"")+'), dus elke administratie heeft zijn eigen bedrijfsgegevens en logo.'+
+        '</div>'+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:20px 22px;">'+
+          '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:14px;">Bedrijfsgegevens</div>'+
+          '<div style="margin-bottom:12px;">'+veldRij("Bedrijfsnaam","bd-naam",a.naam,"")+'</div>'+
+          '<div style="display:flex; gap:10px; margin-bottom:12px;">'+veldRij("KvK-nummer","bd-kvk",a.kvk,"12345678")+veldRij("Btw-nummer","bd-btw",a.btw_nummer,"NL001234567B01")+'</div>'+
+          '<div style="margin-bottom:12px;">'+veldRij("Adres","bd-adres",a.adres,"Straat en huisnummer")+'</div>'+
+          '<div style="display:flex; gap:10px; margin-bottom:12px;">'+veldRij("Postcode","bd-postcode",a.postcode,"1234 AB","38%")+veldRij("Plaats","bd-plaats",a.plaats,"")+'</div>'+
+          '<div style="display:flex; gap:10px; margin-bottom:12px;">'+veldRij("E-mail","bd-email",a.email,"naam@bedrijf.nl")+veldRij("Telefoon","bd-telefoon",a.telefoon,"")+'</div>'+
+          '<div style="margin-bottom:16px;">'+veldRij("IBAN","bd-iban",a.iban,"NL00 BANK 0123 4567 89")+'</div>'+
+          '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:6px;">Logo</label>'+
+          '<div style="display:flex; gap:12px; align-items:center; margin-bottom:18px;">'+
+            '<div id="bd-logo-preview" style="width:64px; height:64px; border-radius:10px; border:1px solid var(--rand); background:var(--papier) center/contain no-repeat; flex-shrink:0;"></div>'+
+            '<div>'+
+              '<button id="bd-logo-kies" style="padding:8px 14px; background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;">Logo kiezen</button>'+
+              '<div id="bd-logo-naam" style="font-size:11px; color:var(--grijs); margin-top:5px;">'+(a.logo_pad?"logo aanwezig":"nog geen logo — png of jpg")+'</div>'+
+              '<input id="bd-logo-file" type="file" accept="image/png,image/jpeg" style="display:none;">'+
+            '</div>'+
+          '</div>'+
+          '<button id="bd-opslaan" style="padding:10px 20px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Bedrijfsgegevens opslaan</button>'+
+          '<span id="bd-status" style="font-size:11.5px; color:var(--groen); margin-left:12px;"></span>'+
+        '</div>'+
+      '</div>';
+
+    // Bestaand logo tonen
+    var gekozenLogo = null;
+    if(a.logo_pad){
+      try {
+        var s = await dbClient().storage.from('adm-bestanden').createSignedUrl(a.logo_pad, 120);
+        if(s.data && s.data.signedUrl){ document.getElementById('bd-logo-preview').style.backgroundImage = "url('"+s.data.signedUrl+"')"; }
+      } catch(e){}
+    }
+    document.getElementById('bd-logo-kies').onclick = function(){ document.getElementById('bd-logo-file').click(); };
+    document.getElementById('bd-logo-file').onchange = function(){
+      if(this.files[0]){
+        gekozenLogo = this.files[0];
+        document.getElementById('bd-logo-naam').textContent = gekozenLogo.name;
+        var reader = new FileReader();
+        reader.onload = function(e){ document.getElementById('bd-logo-preview').style.backgroundImage = "url('"+e.target.result+"')"; };
+        reader.readAsDataURL(gekozenLogo);
+      }
+    };
+
+    document.getElementById('bd-opslaan').onclick = async function(){
+      var naam = document.getElementById('bd-naam').value.trim();
+      if(!naam){ await fwMelding("Vul een bedrijfsnaam in."); return; }
+      this.textContent = "Bezig…"; this.disabled = true;
+
+      var logoPad = a.logo_pad;
+      if(gekozenLogo){
+        var ext = (gekozenLogo.name.split('.').pop() || 'png').toLowerCase();
+        var pad = user.id + "/logo_" + curAdmin + "_" + Date.now() + "." + ext;
+        var up = await dbClient().storage.from('adm-bestanden').upload(pad, gekozenLogo, { upsert:true });
+        if(up.error){ await fwMelding("Logo uploaden mislukt: " + up.error.message); this.textContent="Bedrijfsgegevens opslaan"; this.disabled=false; return; }
+        logoPad = pad;
+      }
+
+      var g = function(x){ return document.getElementById(x).value.trim() || null; };
+      var r = await dbClient().from('adm_administraties').update({
+        naam:naam, kvk:g('bd-kvk'), btw_nummer:g('bd-btw'),
+        adres:g('bd-adres'), postcode:g('bd-postcode'), plaats:g('bd-plaats'),
+        email:g('bd-email'), telefoon:g('bd-telefoon'), iban:g('bd-iban'),
+        logo_pad:logoPad
+      }).eq('id', curAdmin);
+      if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); this.textContent="Bedrijfsgegevens opslaan"; this.disabled=false; return; }
+      await laadAdmins(); applyAdmin();
+      this.textContent = "Bedrijfsgegevens opslaan"; this.disabled = false;
+      document.getElementById('bd-status').textContent = "Opgeslagen ✓";
+      setTimeout(function(){ var el=document.getElementById('bd-status'); if(el) el.textContent=""; }, 2500);
+    };
+  }
+
+  async function schermFacturenPlaceholder(){
+    var it = huidigItem();
+    schermEl.innerHTML =
+      '<div class="fw-leeg">'+
+        ic(it.icon, 'style="font-size:30px; color:var(--rand);"')+
+        '<div style="font-size:13px; color:var(--inkt); font-weight:600; margin-bottom:3px;">'+it.label+'</div>'+
+        '<div style="font-size:12px;">Dit onderdeel bouwen we als volgende stap. Vul eerst je bedrijfsgegevens in bij \u201cMijn bedrijfsgegevens\u201d.</div>'+
+      '</div>';
+  }
 
   // ── BTW-scherm ────────────────────────────────────────────────────────────
   async function schermBtw(){
