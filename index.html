@@ -1433,6 +1433,7 @@
       if(curItem === "bedrijf"){ await schermBedrijf(); }
       else if(curItem === "klanten"){ await schermKlanten(); }
       else if(curItem === "nieuw"){ await schermNieuweFactuur(); }
+      else if(curItem === "overzicht"){ await schermFacturenOverzicht(); }
       else { await schermFacturenPlaceholder(); }
       toonFactuurUitleg();
       return;
@@ -2361,6 +2362,87 @@
       }
     }
     return null;
+  }
+
+  // ── Facturen: overzicht van opgeslagen facturen ─────────────────────────
+  async function laadFacturen(){
+    if(!curAdmin) return [];
+    var r = await dbClient().from('adm_facturen').select('*').eq('administratie_id', curAdmin).order('aangemaakt', { ascending:false });
+    if(r.error){ console.error(r.error); return []; }
+    return r.data;
+  }
+
+  async function schermFacturenOverzicht(){
+    var facturen = await laadFacturen();
+    var klanten = await laadKlanten();
+    var klantNaam = {};
+    klanten.forEach(function(k){ klantNaam[k.id] = k.naam; });
+
+    function rij(f){
+      var naam = f.klant_id && klantNaam[f.klant_id] ? klantNaam[f.klant_id] : "— geen klant —";
+      var isConcept = (f.status !== 'definitief');
+      var badge = isConcept
+        ? '<span style="font-size:10px; font-weight:700; color:var(--goud); background:#FBF6E6; border:1px solid var(--goud); border-radius:5px; padding:2px 7px;">Concept</span>'
+        : '<span style="font-size:10px; font-weight:700; color:var(--groen); background:#F1F6F1; border:1px solid var(--groen); border-radius:5px; padding:2px 7px;">Definitief</span>';
+      return '<div class="fac-rij" data-id="'+f.id+'" data-concept="'+(isConcept?"1":"0")+'" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-top:1px solid var(--rand-licht); cursor:'+(isConcept?'pointer':'default')+';">'+
+        '<div style="flex:1; min-width:0;">'+
+          '<div style="font-size:12.5px; font-weight:600; color:var(--navy);">'+ontsnap(naam)+(f.factuurnummer?' <span style="color:var(--grijs); font-weight:400;">· '+ontsnap(f.factuurnummer)+'</span>':'')+'</div>'+
+          '<div style="font-size:11px; color:var(--grijs);">'+(f.factuurdatum||"geen datum")+(f.omschrijving?' · '+ontsnap(f.omschrijving.slice(0,50)):'')+'</div>'+
+        '</div>'+
+        badge+
+        '<div style="width:100px; text-align:right; font-size:12.5px; font-weight:600; color:var(--navy); font-variant-numeric:tabular-nums;">'+eur(f.totaal_incl)+'</div>'+
+      '</div>';
+    }
+
+    var concepten = facturen.filter(function(f){ return f.status !== 'definitief'; });
+    var definitief = facturen.filter(function(f){ return f.status === 'definitief'; });
+
+    var html = '<div style="max-width:720px;">';
+    if(!facturen.length){
+      html += '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:28px; text-align:center; color:var(--grijs); font-size:12.5px;">Nog geen facturen. Maak er een aan bij \u201cNieuwe factuur\u201d.</div>';
+    } else {
+      if(concepten.length){
+        html += '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700; margin-bottom:6px;">Concepten</div>'+
+          '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; overflow:hidden; margin-bottom:18px;">'+concepten.map(rij).join("")+'</div>';
+      }
+      if(definitief.length){
+        html += '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--groen); font-weight:700; margin-bottom:6px;">Definitieve facturen</div>'+
+          '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; overflow:hidden;">'+definitief.map(rij).join("")+'</div>';
+      }
+      html += '<div style="font-size:10.5px; color:var(--grijs); margin-top:12px; line-height:1.5;">Klik een concept aan om het te openen en verder te werken of definitief te maken. Definitieve facturen zijn vastgelegd en al als omzet geboekt.</div>';
+    }
+    html += '</div>';
+    schermEl.innerHTML = html;
+
+    Array.prototype.forEach.call(schermEl.querySelectorAll('.fac-rij'), function(row){
+      if(row.getAttribute('data-concept') !== "1") return;
+      row.onclick = async function(){
+        await laadFactuurInConcept(row.getAttribute('data-id'));
+        curItem = "nieuw";
+        renderNav();
+        await renderScherm();
+      };
+    });
+  }
+
+  // Een opgeslagen factuur (met regels en bonnen) terug in factuurConcept laden
+  async function laadFactuurInConcept(factuurId){
+    var f = await dbClient().from('adm_facturen').select('*').eq('id', factuurId).single();
+    if(f.error){ await fwMelding("Kon factuur niet laden: " + f.error.message); return; }
+    var rg = await dbClient().from('adm_factuurregels').select('*').eq('factuur_id', factuurId).order('volgorde');
+    var bn = await dbClient().from('adm_factuurbonnen').select('*').eq('factuur_id', factuurId);
+    var d = f.data;
+    factuurConcept = {
+      id:d.id, klant_id:d.klant_id, factuurdatum:d.factuurdatum,
+      omschrijving:d.omschrijving||"", status:d.status, uurtarief:0,
+      korting_pct:Number(d.korting_pct)||0,
+      regels:(rg.data||[]).map(function(r){ return {
+        soort:r.soort, datum:r.datum, omschrijving:r.omschrijving||"",
+        aantal:Number(r.aantal)||0, tarief:Number(r.tarief)||0, btw_pct:(r.btw_pct==null?21:Number(r.btw_pct))
+      }; }),
+      bonnen:(bn.data||[]).map(function(b){ return { id:b.id, bestand_pad:b.bestand_pad, naam:b.bestandsnaam, bestandsnaam:b.bestandsnaam }; })
+    };
+    if(!factuurConcept.regels.length){ factuurConcept.regels = [{soort:"uren", datum:standaardDatum(), omschrijving:"", aantal:0, tarief:0, btw_pct:21}]; }
   }
 
   async function schermFacturenPlaceholder(){
