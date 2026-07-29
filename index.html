@@ -389,6 +389,9 @@
         sub:(a.kvk ? "KvK "+a.kvk : "administratie"),
         ritme:(a.btw_ritme || 'kwartaal'),
         kvk:(a.kvk||""), btw_nummer:(a.btw_nummer||""),
+        adres:(a.adres||""), postcode:(a.postcode||""), plaats:(a.plaats||""),
+        email:(a.email||""), telefoon:(a.telefoon||""), iban:(a.iban||""),
+        logo_pad:(a.logo_pad||null),
         gearchiveerd:!!a.gearchiveerd
       };
     });
@@ -578,17 +581,43 @@
     var overlay = document.createElement('div');
     overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2100; padding:20px;";
     var box = document.createElement('div');
-    box.style.cssText = "width:100%; max-width:420px; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25); overflow:hidden;";
+    box.style.cssText = "width:100%; max-width:520px; max-height:88vh; overflow:auto; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25);";
+    function inp(id, val, ph){ return '<input id="'+id+'" type="text" value="'+(val||"").replace(/"/g,"&quot;")+'" placeholder="'+(ph||"")+'" style="width:100%; padding:8px 10px; border:1px solid var(--rand); border-radius:8px; font-size:12.5px; background:var(--wit);">'; }
+    function lbl(t){ return '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px; margin-top:10px;">'+t+'</label>'; }
     box.innerHTML =
-      '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; font-size:13px; font-weight:700; color:#FFFFFF;">Administratie beheren</div>'+
+      '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; font-size:13px; font-weight:700; color:#FFFFFF; position:sticky; top:0;">Administratie beheren</div>'+
       '<div style="padding:18px;">'+
-        '<label style="display:block; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:4px;">Naam</label>'+
-        '<input id="bh-naam" type="text" value="'+(a.naam||"").replace(/"/g,"&quot;")+'" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); margin-bottom:12px;">'+
-        '<label style="display:block; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:4px;">KvK-nummer</label>'+
-        '<input id="bh-kvk" type="text" value="'+(a.kvk||"").replace(/"/g,"&quot;")+'" placeholder="bijv. 12345678" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); margin-bottom:12px;">'+
-        '<label style="display:block; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:4px;">Btw-nummer</label>'+
-        '<input id="bh-btw" type="text" value="'+(a.btw_nummer||"").replace(/"/g,"&quot;")+'" placeholder="bijv. NL001234567B01" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); margin-bottom:18px;">'+
-        '<div style="display:flex; gap:8px; align-items:center;">'+
+        lbl("Naam")+ inp("bh-naam", a.naam)+
+        '<div style="display:flex; gap:10px;">'+
+          '<div style="flex:1;">'+lbl("KvK-nummer")+inp("bh-kvk", a.kvk, "12345678")+'</div>'+
+          '<div style="flex:1;">'+lbl("Btw-nummer")+inp("bh-btw", a.btw_nummer, "NL001234567B01")+'</div>'+
+        '</div>'+
+
+        '<div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--rand-licht);">'+
+          '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700; margin-bottom:2px;">Bedrijfsgegevens voor facturen</div>'+
+          '<div style="font-size:10.5px; color:var(--grijs);">Deze gegevens verschijnen op je facturen.</div>'+
+          lbl("Adres")+ inp("bh-adres", a.adres, "Straat en huisnummer")+
+          '<div style="display:flex; gap:10px;">'+
+            '<div style="width:38%;">'+lbl("Postcode")+inp("bh-postcode", a.postcode, "1234 AB")+'</div>'+
+            '<div style="flex:1;">'+lbl("Plaats")+inp("bh-plaats", a.plaats)+'</div>'+
+          '</div>'+
+          '<div style="display:flex; gap:10px;">'+
+            '<div style="flex:1;">'+lbl("E-mail")+inp("bh-email", a.email, "naam@bedrijf.nl")+'</div>'+
+            '<div style="flex:1;">'+lbl("Telefoon")+inp("bh-telefoon", a.telefoon)+'</div>'+
+          '</div>'+
+          lbl("IBAN")+ inp("bh-iban", a.iban, "NL00 BANK 0123 4567 89")+
+          lbl("Logo")+
+          '<div style="display:flex; gap:10px; align-items:center;">'+
+            '<div id="bh-logo-preview" style="width:52px; height:52px; border-radius:8px; border:1px solid var(--rand); background:var(--wit) center/contain no-repeat; flex-shrink:0;'+(a.logo_pad?'':'')+'"></div>'+
+            '<div style="flex:1;">'+
+              '<button id="bh-logo-kies" style="padding:7px 12px; background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;">Logo kiezen</button>'+
+              '<span id="bh-logo-naam" style="font-size:10.5px; color:var(--grijs); margin-left:8px;">'+(a.logo_pad?"logo aanwezig":"geen logo")+'</span>'+
+              '<input id="bh-logo-file" type="file" accept="image/png,image/jpeg" style="display:none;">'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+
+        '<div style="display:flex; gap:8px; align-items:center; margin-top:18px;">'+
           '<button id="bh-opslaan" style="padding:9px 16px; background:var(--navy); border:1px solid var(--navy); color:var(--papier); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Opslaan</button>'+
           '<button id="bh-annuleer" style="padding:9px 16px; background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; cursor:pointer;">Annuleren</button>'+
           '<button id="bh-archief" style="margin-left:auto; padding:9px 16px; background:transparent; border:1px solid '+(a.gearchiveerd?"var(--groen)":"var(--goud)")+'; color:'+(a.gearchiveerd?"var(--groen)":"var(--goud)")+'; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">'+(a.gearchiveerd?"Terughalen":"Archiveren")+'</button>'+
@@ -608,14 +637,51 @@
 
     document.getElementById('bh-annuleer').onclick = sluit;
 
+    // Logo tonen indien aanwezig
+    var gekozenLogo = null;
+    (async function(){
+      if(a.logo_pad){
+        try {
+          var s = await dbClient().storage.from('adm-bestanden').createSignedUrl(a.logo_pad, 120);
+          if(s.data && s.data.signedUrl){
+            document.getElementById('bh-logo-preview').style.backgroundImage = "url('"+s.data.signedUrl+"')";
+          }
+        } catch(e){}
+      }
+    })();
+    document.getElementById('bh-logo-kies').onclick = function(){ document.getElementById('bh-logo-file').click(); };
+    document.getElementById('bh-logo-file').onchange = function(){
+      if(this.files[0]){
+        gekozenLogo = this.files[0];
+        document.getElementById('bh-logo-naam').textContent = gekozenLogo.name;
+        var reader = new FileReader();
+        reader.onload = function(e){ document.getElementById('bh-logo-preview').style.backgroundImage = "url('"+e.target.result+"')"; };
+        reader.readAsDataURL(gekozenLogo);
+      }
+    };
+
     document.getElementById('bh-opslaan').onclick = async function(){
       var naam = document.getElementById('bh-naam').value.trim();
       if(!naam){ await fwMelding("Geef de administratie een naam."); return; }
       this.textContent = "Bezig…"; this.disabled = true;
+
+      // Logo uploaden indien gekozen
+      var logoPad = a.logo_pad;
+      if(gekozenLogo){
+        var ext = (gekozenLogo.name.split('.').pop() || 'png').toLowerCase();
+        var pad = user.id + "/logo_" + id + "_" + Date.now() + "." + ext;
+        var up = await dbClient().storage.from('adm-bestanden').upload(pad, gekozenLogo, { upsert:true });
+        if(up.error){ await fwMelding("Logo uploaden mislukt: " + up.error.message); this.textContent="Opslaan"; this.disabled=false; return; }
+        logoPad = pad;
+      }
+
+      var g = function(x){ return document.getElementById(x).value.trim() || null; };
       var r = await dbClient().from('adm_administraties').update({
         naam:naam,
-        kvk:document.getElementById('bh-kvk').value.trim() || null,
-        btw_nummer:document.getElementById('bh-btw').value.trim() || null
+        kvk:g('bh-kvk'), btw_nummer:g('bh-btw'),
+        adres:g('bh-adres'), postcode:g('bh-postcode'), plaats:g('bh-plaats'),
+        email:g('bh-email'), telefoon:g('bh-telefoon'), iban:g('bh-iban'),
+        logo_pad:logoPad
       }).eq('id', id);
       if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
       sluit();
