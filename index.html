@@ -1432,6 +1432,7 @@
     if(curView === "facturen"){
       if(curItem === "bedrijf"){ await schermBedrijf(); }
       else if(curItem === "klanten"){ await schermKlanten(); }
+      else if(curItem === "nieuw"){ await schermNieuweFactuur(); }
       else { await schermFacturenPlaceholder(); }
       return;
     }
@@ -1981,6 +1982,219 @@
         await schermKlanten();
       };
     }
+  }
+
+  // ── Facturen: nieuwe factuur opstellen ───────────────────────────────────
+  // Concept in het geheugen tijdens het opstellen. Regels: {soort,datum,omschrijving,aantal,tarief}
+  var factuurConcept = null;
+
+  function nieuwConcept(){
+    return {
+      id:null, klant_id:null, factuurdatum:standaardDatum(), btw_pct:21,
+      omschrijving:"", status:"concept",
+      regels:[ {soort:"uren", datum:standaardDatum(), omschrijving:"", aantal:0, tarief:0} ]
+    };
+  }
+
+  function factuurTotalen(c){
+    var excl = c.regels.reduce(function(s,r){ return s + (Number(r.aantal)||0)*(Number(r.tarief)||0); }, 0);
+    excl = Math.round(excl*100)/100;
+    var btw = Math.round(excl * (Number(c.btw_pct)||0)) / 100;
+    var incl = Math.round((excl+btw)*100)/100;
+    return { excl:excl, btw:btw, incl:incl };
+  }
+
+  async function schermNieuweFactuur(){
+    if(!curAdmin){ await fwMelding("Kies eerst een administratie."); return; }
+    if(!factuurConcept) factuurConcept = nieuwConcept();
+    var c = factuurConcept;
+    var klanten = await laadKlanten();
+    var t = factuurTotalen(c);
+
+    var klantOpties = '<option value="">— kies een klant —</option>' +
+      klanten.map(function(k){ return '<option value="'+k.id+'"'+(c.klant_id===k.id?' selected':'')+'>'+ontsnap(k.naam)+'</option>'; }).join("");
+
+    function urenRegel(r, i){
+      return '<div class="fr-uren" data-i="'+i+'" style="display:flex; gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--rand-licht);">'+
+        '<input type="date" data-veld="datum" value="'+(r.datum||"")+'" style="width:135px; padding:7px 8px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit);">'+
+        '<input type="text" data-veld="omschrijving" value="'+(r.omschrijving||"").replace(/"/g,"&quot;")+'" placeholder="Werkzaamheden" style="flex:1; padding:7px 9px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit);">'+
+        '<input type="number" data-veld="aantal" value="'+(r.aantal||"")+'" placeholder="uren" step="0.25" style="width:74px; padding:7px 8px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit); text-align:right;">'+
+        '<input type="number" data-veld="tarief" value="'+(r.tarief||"")+'" placeholder="tarief" step="0.01" style="width:84px; padding:7px 8px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit); text-align:right;">'+
+        '<span style="width:86px; text-align:right; font-size:12px; color:var(--navy); font-weight:600;">'+eur((Number(r.aantal)||0)*(Number(r.tarief)||0))+'</span>'+
+        '<button data-verwijder="'+i+'" title="Regel verwijderen" style="background:none; border:none; color:var(--grijs); cursor:pointer; padding:2px; display:flex;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>'+
+      '</div>';
+    }
+    function matRegel(r, i){
+      return '<div class="fr-mat" data-i="'+i+'" style="display:flex; gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--rand-licht);">'+
+        '<input type="text" data-veld="omschrijving" value="'+(r.omschrijving||"").replace(/"/g,"&quot;")+'" placeholder="Materiaal of product" style="flex:1; padding:7px 9px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit);">'+
+        '<input type="number" data-veld="aantal" value="'+(r.aantal||"")+'" placeholder="aantal" step="1" style="width:74px; padding:7px 8px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit); text-align:right;">'+
+        '<input type="number" data-veld="tarief" value="'+(r.tarief||"")+'" placeholder="prijs" step="0.01" style="width:84px; padding:7px 8px; border:1px solid var(--rand); border-radius:7px; font-size:12px; background:var(--wit); text-align:right;">'+
+        '<span style="width:86px; text-align:right; font-size:12px; color:var(--navy); font-weight:600;">'+eur((Number(r.aantal)||0)*(Number(r.tarief)||0))+'</span>'+
+        '<button data-verwijder="'+i+'" title="Regel verwijderen" style="background:none; border:none; color:var(--grijs); cursor:pointer; padding:2px; display:flex;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>'+
+      '</div>';
+    }
+
+    var urenRegels = c.regels.map(function(r,i){ return r.soort==="uren" ? urenRegel(r,i) : ""; }).join("");
+    var matRegels  = c.regels.map(function(r,i){ return r.soort==="materiaal" ? matRegel(r,i) : ""; }).join("");
+
+    schermEl.innerHTML =
+      '<div style="max-width:760px;">'+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:14px;">'+
+          '<div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">'+
+            '<div style="flex:1; min-width:200px;">'+
+              '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Klant</label>'+
+              '<div style="display:flex; gap:6px;">'+
+                '<select id="f-klant" style="flex:1; padding:9px 10px; border:1px solid var(--rand); border-radius:8px; font-size:12.5px; background:var(--wit);">'+klantOpties+'</select>'+
+                '<button id="f-klant-nieuw" title="Nieuwe klant" style="padding:0 12px; background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:8px; font-size:16px; cursor:pointer;">+</button>'+
+              '</div>'+
+            '</div>'+
+            '<div style="width:150px;">'+
+              '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Factuurdatum</label>'+
+              '<input id="f-datum" type="date" value="'+(c.factuurdatum||"")+'" style="width:100%; padding:9px 10px; border:1px solid var(--rand); border-radius:8px; font-size:12.5px; background:var(--wit);">'+
+            '</div>'+
+            '<div style="width:110px;">'+
+              '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Btw</label>'+
+              '<select id="f-btw" style="width:100%; padding:9px 10px; border:1px solid var(--rand); border-radius:8px; font-size:12.5px; background:var(--wit);">'+
+                ['21','9','0'].map(function(p){ return '<option value="'+p+'"'+(String(c.btw_pct)===p?' selected':'')+'>'+p+'%</option>'; }).join("")+
+              '</select>'+
+            '</div>'+
+          '</div>'+
+          '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px; margin-top:14px;">Omschrijving van de werkzaamheden</label>'+
+          '<textarea id="f-omschrijving" placeholder="Korte toelichting die bovenaan de factuur komt" style="width:100%; min-height:52px; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:12.5px; background:var(--wit); resize:vertical; font-family:inherit;">'+ontsnap(c.omschrijving)+'</textarea>'+
+        '</div>'+
+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:14px;">'+
+          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:2px;">Werkuren</div>'+
+          '<div style="display:flex; gap:8px; font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--grijs); padding-bottom:2px;">'+
+            '<span style="width:135px;">Datum</span><span style="flex:1;">Werkzaamheden</span><span style="width:74px; text-align:right;">Uren</span><span style="width:84px; text-align:right;">Tarief</span><span style="width:86px; text-align:right;">Totaal</span><span style="width:19px;"></span>'+
+          '</div>'+
+          '<div id="f-uren-lijst">'+(urenRegels||'<div style="padding:8px 0; font-size:11.5px; color:var(--grijs);">Nog geen urenregels.</div>')+'</div>'+
+          '<button id="f-uren-toevoegen" style="margin-top:10px; display:inline-flex; align-items:center; gap:6px; background:transparent; border:1px dashed var(--rand); color:var(--navy); border-radius:8px; font-size:12px; font-weight:600; padding:8px 13px; cursor:pointer;">'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Urenregel toevoegen</button>'+
+        '</div>'+
+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:14px;">'+
+          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:2px;">Materialen</div>'+
+          '<div style="display:flex; gap:8px; font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--grijs); padding-bottom:2px;">'+
+            '<span style="flex:1;">Omschrijving</span><span style="width:74px; text-align:right;">Aantal</span><span style="width:84px; text-align:right;">Prijs</span><span style="width:86px; text-align:right;">Totaal</span><span style="width:19px;"></span>'+
+          '</div>'+
+          '<div id="f-mat-lijst">'+(matRegels||'<div style="padding:8px 0; font-size:11.5px; color:var(--grijs);">Nog geen materialen.</div>')+'</div>'+
+          '<button id="f-mat-toevoegen" style="margin-top:10px; display:inline-flex; align-items:center; gap:6px; background:transparent; border:1px dashed var(--rand); color:var(--navy); border-radius:8px; font-size:12px; font-weight:600; padding:8px 13px; cursor:pointer;">'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Materiaal toevoegen</button>'+
+        '</div>'+
+
+        '<div style="background:var(--navy); border-radius:12px; padding:16px 20px; display:flex; justify-content:flex-end; margin-bottom:14px;">'+
+          '<div style="width:260px;">'+
+            '<div style="display:flex; justify-content:space-between; padding:3px 0; font-size:12.5px; color:#C7CEDA;"><span>Subtotaal (excl. btw)</span><span id="f-tot-excl" style="font-variant-numeric:tabular-nums;">'+eur(t.excl)+'</span></div>'+
+            '<div style="display:flex; justify-content:space-between; padding:3px 0; font-size:12.5px; color:#C7CEDA;"><span>Btw ('+c.btw_pct+'%)</span><span id="f-tot-btw" style="font-variant-numeric:tabular-nums;">'+eur(t.btw)+'</span></div>'+
+            '<div style="display:flex; justify-content:space-between; padding:6px 0 0; margin-top:4px; border-top:1px solid rgba(255,255,255,.2); font-size:15px; font-weight:700; color:#fff;"><span>Totaal</span><span id="f-tot-incl" style="font-variant-numeric:tabular-nums;">'+eur(t.incl)+'</span></div>'+
+          '</div>'+
+        '</div>'+
+
+        '<div style="display:flex; gap:10px; align-items:center;">'+
+          '<button id="f-opslaan" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 20px; cursor:pointer;">Concept opslaan</button>'+
+          '<button id="f-leeg" style="background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; padding:11px 16px; cursor:pointer;">Leegmaken</button>'+
+          '<span id="f-status" style="font-size:11.5px; color:var(--groen);"></span>'+
+        '</div>'+
+        '<div style="font-size:10.5px; color:var(--grijs); margin-top:10px; line-height:1.5;">Het concept wordt opgeslagen; het krijgt pas een factuurnummer en telt pas mee in je omzet wanneer je het later definitief maakt. Voorbeeld en versturen bouwen we in de volgende stap.</div>'+
+      '</div>';
+
+    // Velden die het concept bijwerken
+    function leesKop(){
+      c.klant_id = document.getElementById('f-klant').value || null;
+      c.factuurdatum = document.getElementById('f-datum').value || null;
+      c.btw_pct = parseInt(document.getElementById('f-btw').value,10);
+      c.omschrijving = document.getElementById('f-omschrijving').value;
+    }
+    document.getElementById('f-klant').onchange = leesKop;
+    document.getElementById('f-datum').onchange = leesKop;
+    document.getElementById('f-btw').onchange = function(){ leesKop(); schermNieuweFactuur(); };
+    document.getElementById('f-omschrijving').oninput = leesKop;
+
+    document.getElementById('f-klant-nieuw').onclick = function(){ leesKop(); klantVenster(null); };
+
+    // Regelvelden koppelen
+    function koppelRegels(containerId, soort){
+      Array.prototype.forEach.call(document.getElementById(containerId).querySelectorAll(soort==="uren"?'.fr-uren':'.fr-mat'), function(row){
+        var i = parseInt(row.getAttribute('data-i'),10);
+        Array.prototype.forEach.call(row.querySelectorAll('[data-veld]'), function(inp){
+          inp.oninput = function(){
+            var veld = inp.getAttribute('data-veld');
+            c.regels[i][veld] = (veld==="aantal"||veld==="tarief") ? (parseFloat(inp.value)||0) : inp.value;
+            werkTotalenBij();
+          };
+        });
+        var vbtn = row.querySelector('[data-verwijder]');
+        if(vbtn){ vbtn.onclick = function(){ c.regels.splice(i,1); schermNieuweFactuur(); }; }
+      });
+    }
+    koppelRegels('f-uren-lijst','uren');
+    koppelRegels('f-mat-lijst','materiaal');
+
+    function werkTotalenBij(){
+      var tt = factuurTotalen(c);
+      document.getElementById('f-tot-excl').textContent = eur(tt.excl);
+      document.getElementById('f-tot-btw').textContent  = eur(tt.btw);
+      document.getElementById('f-tot-incl').textContent = eur(tt.incl);
+    }
+
+    document.getElementById('f-uren-toevoegen').onclick = function(){ leesKop(); c.regels.push({soort:"uren", datum:c.factuurdatum||standaardDatum(), omschrijving:"", aantal:0, tarief:0}); schermNieuweFactuur(); };
+    document.getElementById('f-mat-toevoegen').onclick  = function(){ leesKop(); c.regels.push({soort:"materiaal", datum:null, omschrijving:"", aantal:1, tarief:0}); schermNieuweFactuur(); };
+
+    document.getElementById('f-leeg').onclick = async function(){
+      var ok = await fwBevestig("Deze concept-factuur leegmaken en opnieuw beginnen?", { okLabel:"Leegmaken", annuleerLabel:"Annuleren" });
+      if(!ok) return;
+      factuurConcept = nieuwConcept();
+      await schermNieuweFactuur();
+    };
+
+    document.getElementById('f-opslaan').onclick = async function(){
+      leesKop();
+      if(!c.klant_id){ await fwMelding("Kies eerst een klant voor deze factuur."); return; }
+      var echteRegels = c.regels.filter(function(r){ return (Number(r.aantal)||0)>0 || (r.omschrijving||"").trim(); });
+      if(!echteRegels.length){ await fwMelding("Voeg minstens één regel met inhoud toe."); return; }
+      this.textContent = "Bezig…"; this.disabled = true;
+      var fout = await bewaarConcept(c, echteRegels);
+      this.textContent = "Concept opslaan"; this.disabled = false;
+      if(fout){ await fwMelding("Opslaan mislukt: " + fout); return; }
+      document.getElementById('f-status').textContent = "Concept opgeslagen ✓";
+      setTimeout(function(){ var el=document.getElementById('f-status'); if(el) el.textContent=""; }, 2500);
+    };
+  }
+
+  // Concept (factuur + regels) naar de database schrijven. Geeft null bij succes.
+  async function bewaarConcept(c, regels){
+    var t = factuurTotalen({ regels:regels, btw_pct:c.btw_pct });
+    var kop = {
+      administratie_id:curAdmin, user_id:user.id, klant_id:c.klant_id,
+      factuurdatum:c.factuurdatum, omschrijving:c.omschrijving || null,
+      status:'concept', btw_pct:c.btw_pct,
+      totaal_excl:t.excl, totaal_btw:t.btw, totaal_incl:t.incl, bijgewerkt:new Date().toISOString()
+    };
+    var factuurId = c.id;
+    if(factuurId){
+      var u = await dbClient().from('adm_facturen').update(kop).eq('id', factuurId);
+      if(u.error) return u.error.message;
+      await dbClient().from('adm_factuurregels').delete().eq('factuur_id', factuurId);
+    } else {
+      var ins = await dbClient().from('adm_facturen').insert(kop).select().single();
+      if(ins.error) return ins.error.message;
+      factuurId = ins.data.id;
+      c.id = factuurId;
+    }
+    var regelRijen = regels.map(function(r, idx){
+      return {
+        factuur_id:factuurId, user_id:user.id, soort:r.soort,
+        datum:(r.soort==="uren" ? (r.datum||null) : null),
+        omschrijving:r.omschrijving || null,
+        aantal:Number(r.aantal)||0, tarief:Number(r.tarief)||0,
+        regel_totaal:Math.round((Number(r.aantal)||0)*(Number(r.tarief)||0)*100)/100,
+        volgorde:idx
+      };
+    });
+    var ri = await dbClient().from('adm_factuurregels').insert(regelRijen);
+    if(ri.error) return ri.error.message;
+    return null;
   }
 
   async function schermFacturenPlaceholder(){
