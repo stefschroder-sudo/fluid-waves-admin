@@ -1229,11 +1229,12 @@
             : '<button class="bk-betaald" data-id="'+r.id+'" data-betaald="0" title="Markeer als betaald" style="flex-shrink:0; font-size:9.5px; font-weight:700; color:var(--grijs); background:transparent; border:1px solid var(--rand); border-radius:5px; padding:3px 8px; cursor:pointer;">Te betalen</button>';
         }
         html +=
-          '<div data-edit="'+r.id+'" style="display:flex; align-items:center; gap:10px; padding:9px 12px; font-size:12.5px; cursor:pointer; '+(actief?'background:#FBF6E6;':'')+(i?'border-top:1px solid var(--rand-licht);':'')+'">'+
+          '<div data-edit="'+r.id+'" style="display:flex; align-items:center; gap:8px; padding:9px 12px; font-size:12.5px; cursor:pointer; '+(actief?'background:#FBF6E6;':'')+(i?'border-top:1px solid var(--rand-licht);':'')+'">'+
             '<span style="width:82px; flex-shrink:0; color:var(--grijs);">'+(r.datum||'—')+'</span>'+
             '<span style="flex:1; min-width:0; font-weight:600; color:var(--inkt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+(r.naam||'—')+(r.omschrijving?' <span style="font-weight:400; color:var(--grijs);">· '+r.omschrijving+'</span>':'')+'</span>'+
-            '<span style="width:100px; flex-shrink:0; text-align:right;">'+eur(r.bedrag_excl)+'</span>'+
-            '<span style="width:64px; flex-shrink:0; text-align:right; color:var(--grijs);">'+r.btw_pct+'% btw</span>'+
+            '<span style="width:82px; flex-shrink:0; text-align:right; font-variant-numeric:tabular-nums;">'+eur(r.bedrag_excl)+'<div style="font-size:8.5px; color:var(--grijs); text-transform:uppercase; letter-spacing:.03em;">excl.</div></span>'+
+            '<span style="width:72px; flex-shrink:0; text-align:right; color:var(--grijs); font-variant-numeric:tabular-nums;">'+eur(r.btw_bedrag)+'<div style="font-size:8.5px; color:var(--grijs); text-transform:uppercase; letter-spacing:.03em;">'+r.btw_pct+'% btw</div></span>'+
+            '<span style="width:82px; flex-shrink:0; text-align:right; font-weight:600; color:var(--navy); font-variant-numeric:tabular-nums;">'+eur(r.bedrag_incl)+'<div style="font-size:8.5px; color:var(--grijs); text-transform:uppercase; letter-spacing:.03em;">incl.</div></span>'+
             betaaldKnop+
             '<span style="width:22px; flex-shrink:0; text-align:center;">'+(r.bestand_pad ? '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--goud); font-size:15px;" data-title="Bewijsstuk openen" data-bestand="'+r.bestand_pad+'"><path d="M15 7l-6.5 6.5a2.5 2.5 0 0 0 3.5 3.5L18 11a5 5 0 0 0-7-7l-6 6a7.5 7.5 0 0 0 10.5 10.5"/></svg>' : '')+'</span>'+
             '<button data-del="'+r.id+'" title="Verwijderen" style="width:22px; flex-shrink:0; background:none; border:none; color:var(--rood); cursor:pointer; font-size:15px; padding:0;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/></svg></button>'+
