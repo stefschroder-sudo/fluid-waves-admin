@@ -2314,7 +2314,7 @@
     document.getElementById('f-opslaan').onclick = async function(){
       leesKop();
       if(!c.klant_id){ await fwMelding("Kies eerst een klant voor deze factuur."); return; }
-      var echteRegels = c.regels.filter(function(r){ return (Number(r.aantal)||0)>0 || (r.omschrijving||"").trim(); });
+      var echteRegels = c.regels.filter(function(r){ return (Number(r.aantal)||0)!==0 || (r.omschrijving||"").trim(); });
       if(!echteRegels.length){ await fwMelding("Voeg minstens één regel met inhoud toe."); return; }
       this.textContent = "Bezig…"; this.disabled = true;
       var fout = await bewaarConcept(c, echteRegels);
@@ -2327,7 +2327,7 @@
     document.getElementById('f-voorbeeld').onclick = async function(){
       leesKop();
       if(!c.klant_id){ await fwMelding("Kies eerst een klant voor deze factuur."); return; }
-      var echteRegels = c.regels.filter(function(r){ return (Number(r.aantal)||0)>0 || (r.omschrijving||"").trim(); });
+      var echteRegels = c.regels.filter(function(r){ return (Number(r.aantal)||0)!==0 || (r.omschrijving||"").trim(); });
       if(!echteRegels.length){ await fwMelding("Voeg minstens één regel met inhoud toe."); return; }
       this.textContent = "Bezig…"; this.disabled = true;
       // Eerst het concept opslaan, dan het voorbeeld tonen
@@ -2360,12 +2360,13 @@
     return {
       bedrijf:{ naam:a.naam, adres:a.adres, postcode:a.postcode, plaats:a.plaats, email:a.email, telefoon:a.telefoon, iban:a.iban, kvk:a.kvk, btw:a.btw_nummer },
       klant: klant ? { naam:klant.naam, adres:klant.adres, postcode:klant.postcode, plaats:klant.plaats, email:klant.email } : {},
-      soort: (c.status === 'definitief' ? 'factuur' : 'offerte'),
+      soort: (c.soort === 'credit' ? 'credit' : (c.status === 'definitief' ? 'factuur' : 'offerte')),
+      credit_van_nummer: c.credit_van_nummer || null,
       factuurnummer: c.factuurnummer || null,
       factuurdatum: c.factuurdatum,
       omschrijving: c.omschrijving,
       korting_pct: c.korting_pct || 0,
-      regels: c.regels.filter(function(r){ return (Number(r.aantal)||0)>0 || (r.omschrijving||"").trim(); }),
+      regels: c.regels.filter(function(r){ return (Number(r.aantal)||0)!==0 || (r.omschrijving||"").trim(); }),
       logo_base64: logo_base64
     };
   }
@@ -2391,8 +2392,9 @@
       '<div id="fv-body" style="flex:1; overflow:auto; background:#525659; display:flex; align-items:center; justify-content:center;"><div style="color:#fff; font-size:12px; padding:40px;">Voorbeeld laden…</div></div>'+
       '<div style="padding:12px 18px; background:var(--papier); border-top:1px solid var(--rand); display:flex; gap:10px; align-items:center; flex-wrap:wrap;">'+
         (isDefinitief
-          ? '<span style="font-size:12px; color:var(--groen); font-weight:600;">Factuur '+ontsnap(c.factuurnummer||"")+' · als omzet geboekt.</span>'
-          : '<button id="fv-definitief" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 18px; cursor:pointer;">Akkoord — omzetten naar factuur</button>'
+          ? '<span style="font-size:12px; color:var(--groen); font-weight:600;">'+(c.soort==='credit'?'Creditfactuur ':'Factuur ')+ontsnap(c.factuurnummer||"")+' · geboekt.</span>'+
+            (c.soort!=='credit' ? '<button id="fv-credit" style="background:transparent; border:1px solid var(--rood); color:var(--rood); border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 16px; cursor:pointer;">Creditfactuur maken</button>' : '')
+          : '<button id="fv-definitief" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 18px; cursor:pointer;">'+(c.soort==='credit'?'Akkoord — creditfactuur vastleggen':'Akkoord — omzetten naar factuur')+'</button>'
           )+
         '<button id="fv-verstuur" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 16px; cursor:pointer;">PDF downloaden</button>'+
         '<span id="fv-status" style="font-size:11.5px; color:var(--grijs); flex:1;">Download de PDF en voeg hem toe in je e-mail of WhatsApp.</span>'+
@@ -2420,16 +2422,33 @@
       document.getElementById('fv-status').textContent = "PDF gedownload — voeg hem toe in je e-mail of WhatsApp.";
     };
 
+    var creditBtn = document.getElementById('fv-credit');
+    if(creditBtn){
+      creditBtn.onclick = async function(){
+        var ok = await fwBevestig("Een creditfactuur maken bij factuur "+(c.factuurnummer||"")+"?\n\nDe regels worden overgenomen als terugboeking (negatief). Je kunt ze daarna nog aanpassen of verwijderen voordat je de creditfactuur vastlegt.", { okLabel:"Creditfactuur maken", annuleerLabel:"Annuleren" });
+        if(!ok) return;
+        sluit();
+        await laadCreditConcept(c.id);
+        curItem = "nieuw"; renderNav(); await renderScherm();
+      };
+    }
+
     var defBtn = document.getElementById('fv-definitief');
     if(defBtn){
       defBtn.onclick = async function(){
-        var ok = await fwBevestig("Deze offerte omzetten naar een definitieve factuur?\n\nDe factuur krijgt een factuurnummer en wordt direct als omzet in je administratie geboekt. Dit kan niet worden teruggedraaid.", { okLabel:"Omzetten naar factuur", annuleerLabel:"Annuleren" });
+        var isCredit = (c.soort === 'credit');
+        var vraag = isCredit
+          ? "Deze creditfactuur vastleggen?\n\nHij krijgt een factuurnummer en wordt als negatieve omzet (terugboeking) in je administratie geboekt. Dit kan niet worden teruggedraaid."
+          : "Deze offerte omzetten naar een definitieve factuur?\n\nDe factuur krijgt een factuurnummer en wordt direct als omzet in je administratie geboekt. Dit kan niet worden teruggedraaid.";
+        var ok = await fwBevestig(vraag, { okLabel:(isCredit?"Creditfactuur vastleggen":"Omzetten naar factuur"), annuleerLabel:"Annuleren" });
         if(!ok) return;
         defBtn.textContent = "Bezig…"; defBtn.disabled = true;
         var fout = await maakDefinitief(c);
-        if(fout){ await fwMelding("Omzetten mislukt: " + fout); defBtn.textContent="Akkoord — omzetten naar factuur"; defBtn.disabled=false; return; }
+        if(fout){ await fwMelding("Mislukt: " + fout); defBtn.disabled=false; return; }
         sluit();
-        await fwMelding("Offerte omgezet naar factuur "+c.factuurnummer+" en als omzet geboekt.");
+        await fwMelding(isCredit
+          ? "Creditfactuur "+c.factuurnummer+" is vastgelegd en als terugboeking geboekt."
+          : "Offerte omgezet naar factuur "+c.factuurnummer+" en als omzet geboekt.");
         factuurConcept = null;
         curItem = "overzicht"; renderNav(); await renderScherm();
       };
@@ -2464,13 +2483,14 @@
       // Omzetboeking aanmaken (netto excl. btw, totale btw over de factuur)
       var klantNaam = "";
       if(c.klant_id){ var k = await dbClient().from('adm_klanten').select('naam').eq('id', c.klant_id).single(); if(!k.error) klantNaam = k.data.naam; }
+      var isCredit = (c.soort === 'credit');
       var boeking = {
         administratie_id:curAdmin, user_id:user.id, soort:'omzet',
-        datum:c.factuurdatum, naam:klantNaam || 'Factuur',
-        omschrijving:'Factuur '+nummer+(c.omschrijving?' — '+c.omschrijving:''),
+        datum:c.factuurdatum, naam:klantNaam || (isCredit?'Creditfactuur':'Factuur'),
+        omschrijving:(isCredit?'Creditfactuur ':'Factuur ')+nummer+(c.omschrijving?' — '+c.omschrijving:''),
         bedrag_excl:t.exclNa, btw_bedrag:t.btw, bedrag_incl:t.incl,
         btw_pct:(function(){ var ps=Object.keys(t.perTarief).map(Number); return ps.length?Math.max.apply(null,ps):21; })(),
-        bron:'factuur'
+        bron:(isCredit?'creditfactuur':'factuur')
       };
       var ins = await dbClient().from('adm_boekingen').insert(boeking).select().single();
       if(ins.error) return ins.error.message;
@@ -2496,6 +2516,7 @@
       administratie_id:curAdmin, user_id:user.id, klant_id:c.klant_id,
       factuurdatum:c.factuurdatum, omschrijving:c.omschrijving || null,
       status:'concept', btw_pct:kopBtw, korting_pct:(Number(c.korting_pct)||0),
+      soort:(c.soort||'factuur'), credit_van:(c.credit_van||null),
       totaal_excl:t.exclNa, totaal_btw:t.btw, totaal_incl:t.incl, bijgewerkt:new Date().toISOString()
     };
     var factuurId = c.id;
@@ -2564,16 +2585,19 @@
 
     function rij(f){
       var naam = f.klant_id && klantNaam[f.klant_id] ? klantNaam[f.klant_id] : "— geen klant —";
+      var isCredit = (f.soort === 'credit');
       var badge = isOff
         ? '<span style="font-size:10px; font-weight:700; color:var(--goud); background:#FBF6E6; border:1px solid var(--goud); border-radius:5px; padding:2px 7px;">Offerte</span>'
-        : '<span style="font-size:10px; font-weight:700; color:var(--groen); background:#F1F6F1; border:1px solid var(--groen); border-radius:5px; padding:2px 7px;">Factuur</span>';
+        : (isCredit
+          ? '<span style="font-size:10px; font-weight:700; color:var(--rood); background:#FBEDEA; border:1px solid var(--rood); border-radius:5px; padding:2px 7px;">Credit</span>'
+          : '<span style="font-size:10px; font-weight:700; color:var(--groen); background:#F1F6F1; border:1px solid var(--groen); border-radius:5px; padding:2px 7px;">Factuur</span>');
       return '<div class="fac-rij" data-id="'+f.id+'" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-top:1px solid var(--rand-licht); cursor:pointer;">'+
         '<div style="flex:1; min-width:0;">'+
           '<div style="font-size:12.5px; font-weight:600; color:var(--navy);">'+ontsnap(naam)+(f.factuurnummer?' <span style="color:var(--grijs); font-weight:400;">· '+ontsnap(f.factuurnummer)+'</span>':'')+'</div>'+
           '<div style="font-size:11px; color:var(--grijs);">'+(f.factuurdatum||"geen datum")+(f.omschrijving?' · '+ontsnap(f.omschrijving.slice(0,50)):'')+'</div>'+
         '</div>'+
         badge+
-        '<div style="width:100px; text-align:right; font-size:12.5px; font-weight:600; color:var(--navy); font-variant-numeric:tabular-nums;">'+eur(f.totaal_incl)+'</div>'+
+        '<div style="width:100px; text-align:right; font-size:12.5px; font-weight:600; color:'+(isCredit?'var(--rood)':'var(--navy)')+'; font-variant-numeric:tabular-nums;">'+eur(f.totaal_incl)+'</div>'+
       '</div>';
     }
 
@@ -2614,12 +2638,37 @@
     factuurConcept = {
       id:d.id, klant_id:d.klant_id, factuurdatum:d.factuurdatum,
       omschrijving:d.omschrijving||"", status:d.status, uurtarief:0,
+      soort:(d.soort||'factuur'), credit_van:(d.credit_van||null),
       korting_pct:Number(d.korting_pct)||0,
       regels:(rg.data||[]).map(function(r){ return {
         soort:r.soort, datum:r.datum, omschrijving:r.omschrijving||"",
         aantal:Number(r.aantal)||0, tarief:Number(r.tarief)||0, btw_pct:(r.btw_pct==null?21:Number(r.btw_pct))
       }; }),
       bonnen:(bn.data||[]).map(function(b){ return { id:b.id, bestand_pad:b.bestand_pad, naam:b.bestandsnaam, bestandsnaam:b.bestandsnaam }; })
+    };
+    if(!factuurConcept.regels.length){ factuurConcept.regels = [{soort:"uren", datum:standaardDatum(), omschrijving:"", aantal:0, tarief:0, btw_pct:21}]; }
+  }
+
+  // Een creditfactuur-concept opbouwen uit een bestaande (definitieve) factuur.
+  // De regels worden overgenomen met negatief aantal (terugboeking); de gebruiker
+  // kan regels aanpassen of verwijderen voordat hij crediteert.
+  async function laadCreditConcept(factuurId){
+    var f = await dbClient().from('adm_facturen').select('*').eq('id', factuurId).single();
+    if(f.error){ await fwMelding("Kon factuur niet laden: " + f.error.message); return; }
+    var rg = await dbClient().from('adm_factuurregels').select('*').eq('factuur_id', factuurId).order('volgorde');
+    var d = f.data;
+    factuurConcept = {
+      id:null,                              // nieuwe factuur (credit)
+      klant_id:d.klant_id, factuurdatum:standaardDatum(),
+      omschrijving:"Creditfactuur bij factuur "+(d.factuurnummer||"")+(d.omschrijving?" — "+d.omschrijving:""),
+      status:'concept', soort:'credit', credit_van:d.id, credit_van_nummer:d.factuurnummer,
+      uurtarief:0, korting_pct:Number(d.korting_pct)||0,
+      regels:(rg.data||[]).map(function(r){ return {
+        soort:r.soort, datum:r.datum, omschrijving:r.omschrijving||"",
+        aantal:-Math.abs(Number(r.aantal)||0),   // negatief: terugboeking
+        tarief:Number(r.tarief)||0, btw_pct:(r.btw_pct==null?21:Number(r.btw_pct))
+      }; }),
+      bonnen:[]
     };
     if(!factuurConcept.regels.length){ factuurConcept.regels = [{soort:"uren", datum:standaardDatum(), omschrijving:"", aantal:0, tarief:0, btw_pct:21}]; }
   }
