@@ -398,6 +398,8 @@
         adres:(a.adres||""), postcode:(a.postcode||""), plaats:(a.plaats||""),
         email:(a.email||""), telefoon:(a.telefoon||""), iban:(a.iban||""),
         logo_pad:(a.logo_pad||null),
+        actueel_banksaldo:(a.actueel_banksaldo!=null?Number(a.actueel_banksaldo):null),
+        actueel_banksaldo_datum:(a.actueel_banksaldo_datum||null),
         gearchiveerd:!!a.gearchiveerd
       };
     });
@@ -1694,6 +1696,18 @@
         openVak("Nog te betalen", crediteuren, "Inkoop en kosten die jij nog moet betalen (crediteuren).")+
       '</div>'+
       '<div style="font-size:10.5px; color:var(--grijs); margin-bottom:18px; line-height:1.5;">Deze bedragen bewegen mee met de gekozen periode ('+info.label+'). Kies bovenin een andere periode of het hele jaar voor een ander beeld.</div>'+
+      '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px; margin-bottom:18px;">'+
+        '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:4px;">Actueel banksaldo</div>'+
+        '<div style="font-size:12px; color:var(--grijs); margin-bottom:14px; line-height:1.5;">Vul hier op elk moment het actuele saldo van je zakelijke rekening(en) in, met de datum van vandaag. Dit saldo wordt ook door de balans gebruikt bij \u201cBank en kas\u201d.</div>'+
+        '<div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">'+
+          '<div style="flex:1; min-width:140px;"><label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Saldo (€)</label>'+
+            '<input id="dash-bank" type="number" step="0.01" value="'+((admins[curAdmin]&&admins[curAdmin].actueel_banksaldo!=null)?admins[curAdmin].actueel_banksaldo:"")+'" placeholder="0,00" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); text-align:right;"></div>'+
+          '<div style="width:160px;"><label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Per datum</label>'+
+            '<input id="dash-bank-datum" type="date" value="'+((admins[curAdmin]&&admins[curAdmin].actueel_banksaldo_datum)?admins[curAdmin].actueel_banksaldo_datum:standaardDatum())+'" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit);"></div>'+
+          '<button id="dash-bank-opslaan" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 18px; cursor:pointer;">Opslaan</button>'+
+          '<span id="dash-bank-status" style="font-size:11.5px; color:var(--groen);"></span>'+
+        '</div>'+
+      '</div>'+
       '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px;">'+
         '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:4px;">Exporteren</div>'+
         '<div style="font-size:12px; color:var(--grijs); margin-bottom:14px;">Genereert een Excel-bestand met vier tabbladen — btw-aangifte, omzet, inkoop en kosten, en herkomst per bestand — voor de nu gekozen periode ('+info.label+'). '+aantal+' regel'+(aantal!==1?'s':'')+' in beeld.</div>'+
@@ -1702,6 +1716,23 @@
           'Exporteer '+info.label+' naar Excel'+
         '</button>'+
       '</div>';
+
+    document.getElementById('dash-bank-opslaan').onclick = async function(){
+      this.textContent = "Bezig…"; this.disabled = true;
+      var bedrag = document.getElementById('dash-bank').value;
+      var datum = document.getElementById('dash-bank-datum').value || null;
+      var upd = {
+        actueel_banksaldo: (bedrag===""?null:Number(bedrag)),
+        actueel_banksaldo_datum: (bedrag===""?null:datum)
+      };
+      var r = await dbClient().from('adm_administraties').update(upd).eq('id', curAdmin);
+      this.textContent = "Opslaan"; this.disabled = false;
+      if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); return; }
+      // In-memory bijwerken zodat de balans het meteen ziet
+      if(admins[curAdmin]){ admins[curAdmin].actueel_banksaldo = upd.actueel_banksaldo; admins[curAdmin].actueel_banksaldo_datum = upd.actueel_banksaldo_datum; }
+      document.getElementById('dash-bank-status').textContent = "Opgeslagen ✓";
+      setTimeout(function(){ var el=document.getElementById('dash-bank-status'); if(el) el.textContent=""; }, 2500);
+    };
 
     document.getElementById('dash-export').onclick = async function(){
       this.textContent = "Bezig…"; this.disabled = true;
@@ -3454,8 +3485,15 @@
     });
 
     var kern = await laadBalansKern(BOEKJAAR);
-    var banksaldo = kern ? (Number(kern.banksaldo)||0) : 0;
+    var beginSaldo = kern ? (Number(kern.banksaldo)||0) : 0;
     var eigenVermogen = (kern && kern.eigen_vermogen != null) ? Number(kern.eigen_vermogen) : null;
+
+    // Bank en kas: het actuele saldo (van het dashboard) heeft voorrang; anders de beginstand
+    var adm = admins[curAdmin] || {};
+    var heeftActueel = (adm.actueel_banksaldo != null && adm.actueel_banksaldo !== "");
+    var banksaldo = heeftActueel ? (Number(adm.actueel_banksaldo)||0) : beginSaldo;
+    var banksaldoDatum = heeftActueel ? (adm.actueel_banksaldo_datum || null) : null;
+    var banksaldoBron = heeftActueel ? "actueel" : "beginstand";
 
     // Schulden
     var inkoop = await laadBoekingen('inkoop');
@@ -3488,6 +3526,7 @@
     return {
       bedrijfsmiddelen:round(bedrijfsmiddelen), investeringen:round(investeringen),
       debiteuren:round(debiteuren), banksaldo:round(banksaldo), activa:activa,
+      banksaldoDatum:banksaldoDatum, banksaldoBron:banksaldoBron,
       leningen:round(leningen), crediteuren:round(crediteuren), btwSchuld:round(btwSchuld),
       eigenVermogen:eigenVermogen, schuldenExclEV:schuldenExclEV, passivaMetEV:passivaMetEV,
       verschil:verschil,
@@ -3503,16 +3542,16 @@
 
     schermEl.innerHTML =
       '<div style="max-width:620px;">'+
-        '<div style="font-size:12px; color:var(--grijs); margin-bottom:16px; line-height:1.5;">De twee standen die je zelf invoert voor de balans van '+BOEKJAAR+'. De rest (debiteuren, crediteuren, btw, bedrijfsmiddelen, leningen) haalt de app uit je administratie.</div>'+
+        '<div style="font-size:12px; color:var(--grijs); margin-bottom:16px; line-height:1.5;">De standen die je zelf invoert voor de balans van '+BOEKJAAR+'. De rest (debiteuren, crediteuren, btw, bedrijfsmiddelen, leningen) haalt de app uit je administratie. Je <b>actuele</b> banksaldo vul je in op het Dashboard — dat is wat de balans toont.</div>'+
 
         '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:16px;">'+
-          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:4px;">Banksaldo per 31-12-'+BOEKJAAR+'</div>'+
-          '<div style="font-size:11px; color:var(--grijs); margin-bottom:12px; line-height:1.5;">Het totale saldo van je zakelijke rekening(en) op de laatste dag van het jaar. Lees je bankjaaroverzicht in, of vul het bedrag zelf in.</div>'+
+          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:4px;">Banksaldo per 31-12-'+(BOEKJAAR-1)+' (beginstand)</div>'+
+          '<div style="font-size:11px; color:var(--grijs); margin-bottom:12px; line-height:1.5;">Het totale saldo van je zakelijke rekening(en) aan het einde van vorig jaar — dat is de beginstand van '+BOEKJAAR+'. Lees je bankjaaroverzicht van '+(BOEKJAAR-1)+' in, of vul het bedrag zelf in. Dit legt vast waar je het jaar mee begon.</div>'+
           '<div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:12px;">'+
-            '<div style="flex:1;"><label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Banksaldo (€)</label>'+
+            '<div style="flex:1;"><label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Beginsaldo per 31-12-'+(BOEKJAAR-1)+' (€)</label>'+
               '<input id="bk-bank" type="number" step="0.01" value="'+(bank!==""&&bank!=null?bank:"")+'" placeholder="0,00" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); text-align:right;"></div>'+
           '</div>'+
-          '<div id="bk-drop" style="border:1.5px dashed var(--rand); border-radius:8px; padding:12px; text-align:center; cursor:pointer; background:var(--papier); font-size:11px; color:var(--grijs);">Sleep je bankjaaroverzicht (PDF) hierheen of klik om te kiezen — de saldi worden als voorstel ingelezen</div>'+
+          '<div id="bk-drop" style="border:1.5px dashed var(--rand); border-radius:8px; padding:12px; text-align:center; cursor:pointer; background:var(--papier); font-size:11px; color:var(--grijs);">Sleep je bankjaaroverzicht van '+(BOEKJAAR-1)+' (PDF) hierheen of klik om te kiezen — de saldi worden als voorstel ingelezen</div>'+
           '<input id="bk-file" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">'+
         '</div>'+
 
@@ -3613,7 +3652,7 @@
             regel("Bedrijfsmiddelen (boekwaarde)", c.bedrijfsmiddelen, {lijn:true})+
             (c.investeringen>0?regel("Investeringen", c.investeringen, {lijn:true}):"")+
             regel("Debiteuren (openstaande facturen)", c.debiteuren, {lijn:true})+
-            regel("Bank en kas", c.banksaldo, {lijn:true})+
+            regel("Bank en kas"+(c.banksaldoBron==="actueel"&&c.banksaldoDatum?' <span style="font-size:9px; color:var(--grijs); font-weight:400;">(stand '+c.banksaldoDatum+')</span>':(c.banksaldoBron==="beginstand"?' <span style="font-size:9px; color:var(--grijs); font-weight:400;">(beginstand — vul actueel saldo in op Dashboard)</span>':'')), c.banksaldo, {lijn:true})+
             regel("Totaal bezittingen", c.activa, {dubbel:true, vet:true, groot:true})+
           '</div>'+
           // Passiva
