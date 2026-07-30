@@ -1192,6 +1192,14 @@
     var huidige = bewerken ? alle.filter(function(x){return x.id===bewerkId;})[0] : null;
 
     var html =
+      (soort === "omzet"
+        ? '<div style="background:#FBF6E6; border:1px solid var(--goud); border-radius:10px; padding:12px 15px; margin-bottom:16px;">'+
+            '<div style="font-size:11.5px; color:var(--inkt); line-height:1.55;">'+
+              '<b style="color:var(--navy);">Welke omzet hoort hier?</b> Voer hier omzet in waarvoor je in deze app <b>géén</b> factuur hebt gemaakt — bijvoorbeeld contante verkopen, of facturen die je buiten de app om hebt opgesteld (in Word of een ander systeem). '+
+              'Facturen die je in deze app maakt bij <b>Facturen</b>, worden automatisch als omzet geboekt — die hoef je hier <b>niet</b> nog een keer in te voeren.'+
+            '</div>'+
+          '</div>'
+        : '')+
       '<div style="background:var(--wit); border:1px solid '+(bewerken?'var(--goud)':'var(--rand-licht)')+'; border-radius:10px; padding:14px 16px; margin-bottom:16px;">'+
         '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">'+
           '<div style="font-size:12px; font-weight:600; color:var(--navy);">'+(bewerken?('Bewerken: '+cfg.titelEnk):('Nieuwe '+cfg.titelEnk))+'</div>'+
