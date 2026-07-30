@@ -4046,9 +4046,53 @@
       curView = t.getAttribute('data-view');
       curItem = views[curView].items[0].id;
       bewerkId = null; factuurWachtrij = []; factuurIndex = 0;
+      pasMenuKleurenToe();
       renderNav(); await renderScherm();
     };
   });
+
+  // ── Kleurscheiding menubalk: ondernemer vs. accountant ───────────────────
+  // Terugdraaien: zet MENU_KLEURSCHEIDING op false, dan valt de balk terug op neutraal.
+  var MENU_KLEURSCHEIDING = true;
+  var ONDERNEMER_VIEWS = ["dashboard", "invoeren", "facturen", "btw"];
+  var ACCOUNTANT_VIEWS = ["belasting", "resultaat", "balans", "ib"];
+  function pasMenuKleurenToe(){
+    if(!MENU_KLEURSCHEIDING) return;
+    // Kleuren: ondernemer = navy-accent, accountant = gedempt grijsblauw
+    var kleurOndernemer = "#1B2C4F";   // navy
+    var kleurAccountant = "#6B7A8F";   // rustig grijsblauw
+    Array.prototype.forEach.call(document.querySelectorAll('.fw-top'), function(t){
+      var v = t.getAttribute('data-view');
+      if(ACCOUNTANT_VIEWS.indexOf(v) >= 0){
+        t.setAttribute('data-kamp', 'accountant');
+        if(!t.classList.contains('actief')) t.style.color = kleurAccountant;
+      } else if(ONDERNEMER_VIEWS.indexOf(v) >= 0){
+        t.setAttribute('data-kamp', 'ondernemer');
+        if(!t.classList.contains('actief')) t.style.color = kleurOndernemer;
+      }
+    });
+    // Scheidingsstreepje tussen de twee kampen (vóór de eerste accountant-tab)
+    var eersteAcc = document.querySelector('.fw-top[data-view="belasting"]');
+    if(eersteAcc && !document.getElementById('fw-menu-split')){
+      var split = document.createElement('div');
+      split.id = "fw-menu-split";
+      split.style.cssText = "width:1px; align-self:center; height:20px; background:var(--rand); margin:0 6px;";
+      eersteAcc.parentNode.insertBefore(split, eersteAcc);
+    }
+    // Legenda-strip onder de menubalk
+    if(!document.getElementById('fw-menu-legenda')){
+      var bar = document.getElementById('fw-topmenu');
+      var leg = document.createElement('div');
+      leg.id = "fw-menu-legenda";
+      leg.style.cssText = "width:100%; display:flex; align-items:center; gap:18px; padding:5px 20px; background:var(--papier); border-bottom:1px solid var(--rand); font-size:10.5px; color:var(--grijs);";
+      leg.innerHTML =
+        '<span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:2px; background:#1B2C4F; display:inline-block;"></span>Voor jou als ondernemer — dagelijkse administratie, facturen en btw</span>'+
+        '<span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:2px; background:#6B7A8F; display:inline-block;"></span>Voor (of samen met) je accountant — voorbereiding, controleer met een deskundige</span>';
+      bar.parentNode.insertBefore(leg, bar.nextSibling);
+    }
+  }
+  // Bij het wisselen van tab ook de kleuren opnieuw toepassen (actieve tab pakt zijn eigen stijl)
+  pasMenuKleurenToe();
 
   // ── Sidebar in-/uitklappen ───────────────────────────────────────────────
   var sidebar = document.getElementById('fw-sidebar');
