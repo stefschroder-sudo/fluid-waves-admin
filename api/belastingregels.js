@@ -61,6 +61,11 @@ export default async function handler(req, res) {
     }
 
     // Alle tekstblokken samenvoegen (web search levert meerdere blokken)
+    const verbruik = {
+      model: "claude-sonnet-4-5",
+      input_tokens: (uit.usage && uit.usage.input_tokens) || 0,
+      output_tokens: (uit.usage && uit.usage.output_tokens) || 0
+    };
     const tekst = (uit.content || [])
       .filter(function (c) { return c.type === "text"; })
       .map(function (c) { return c.text; })
@@ -81,9 +86,9 @@ export default async function handler(req, res) {
     }
 
     if (!parsed) {
-      return res.status(200).json({ ok: false, ruwe_tekst: tekst.slice(0, 4000) });
+      return res.status(200).json({ ok: false, ruwe_tekst: tekst.slice(0, 4000), verbruik: verbruik });
     }
-    return res.status(200).json({ ok: true, data: parsed });
+    return res.status(200).json({ ok: true, data: parsed, verbruik: verbruik });
   } catch (err) {
     return res.status(500).json({ error: "Onverwachte fout", detail: String(err).slice(0, 500) });
   }

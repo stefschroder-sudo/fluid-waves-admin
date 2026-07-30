@@ -65,6 +65,11 @@ export default async function handler(req, res) {
     }
 
     const uit = await antwoord.json();
+    const verbruik = {
+      model: "claude-sonnet-4-5",
+      input_tokens: (uit.usage && uit.usage.input_tokens) || 0,
+      output_tokens: (uit.usage && uit.usage.output_tokens) || 0
+    };
     const tekst = (uit.content || [])
       .filter((b) => b.type === "text")
       .map((b) => b.text)
@@ -78,11 +83,11 @@ export default async function handler(req, res) {
     try {
       velden = JSON.parse(schoon);
     } catch (e) {
-      return res.status(200).json({ ok: false, ruwe_tekst: tekst,
+      return res.status(200).json({ ok: false, ruwe_tekst: tekst, verbruik: verbruik,
         error: "Kon het antwoord niet als JSON lezen" });
     }
 
-    return res.status(200).json({ ok: true, velden });
+    return res.status(200).json({ ok: true, velden, verbruik: verbruik });
   } catch (err) {
     return res.status(500).json({ error: "Onverwachte fout", detail: String(err).slice(0, 500) });
   }
