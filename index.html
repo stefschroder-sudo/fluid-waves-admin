@@ -105,9 +105,13 @@
         <div style="font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--goud); font-weight:600; margin-bottom:2px;">Kosten excl. btw</div>
         <div id="fw-str-kosten" style="font-size:15px; font-weight:700; color:#FFFFFF;">€ 0,00</div>
       </div>
-      <div style="flex:1; padding:9px 20px;">
+      <div style="flex:1; padding:9px 20px; border-right:1px solid rgba(255,255,255,.10);">
         <div id="fw-str-btw-label" style="font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--goud); font-weight:600; margin-bottom:2px;">Btw te betalen</div>
         <div id="fw-str-btw" style="font-size:15px; font-weight:700; color:#FFFFFF;">€ 0,00</div>
+      </div>
+      <div style="flex:1; padding:9px 20px;">
+        <div style="font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--goud); font-weight:600; margin-bottom:2px;">Offertes open</div>
+        <div id="fw-str-offertes" style="font-size:15px; font-weight:700; color:#FFFFFF;">€ 0,00</div>
       </div>
     </div>
     <button id="fw-strook-toggle" title="Overzicht tonen of verbergen" style="background:none; border:none; color:rgba(255,255,255,.6); cursor:pointer; padding:9px 16px; align-self:stretch;">
@@ -784,6 +788,7 @@
       document.getElementById('fw-str-omzet').textContent = "€ 0,00";
       document.getElementById('fw-str-kosten').textContent = "€ 0,00";
       document.getElementById('fw-str-btw').textContent = "€ 0,00";
+      var offEl0 = document.getElementById('fw-str-offertes'); if(offEl0) offEl0.textContent = "€ 0,00";
       return;
     }
     // Alle soorten voor de actieve administratie ophalen en op periode filteren
@@ -814,6 +819,16 @@
     document.getElementById('fw-str-btw').textContent = euroStr(Math.abs(openstaand));
     document.getElementById('fw-str-btw-label').textContent =
       (openstaand >= 0 ? "Btw nog te betalen" : "Btw nog te ontvangen") + " · " + BOEKJAAR;
+
+    // ── Openstaande offertes (nog niet omgezet naar factuur), incl. btw ──
+    var offEl = document.getElementById('fw-str-offertes');
+    if(offEl){
+      var facturen = await laadFacturen();
+      var offTot = facturen
+        .filter(function(f){ return f.status !== 'definitief'; })
+        .reduce(function(s,f){ return s + (Number(f.totaal_incl)||0); }, 0);
+      offEl.textContent = euroStr(offTot);
+    }
   }
 
   // ── BTW: status per kwartaal laden/opslaan ───────────────────────────────
