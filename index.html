@@ -1701,11 +1701,29 @@
         '<div style="font-size:12px; color:var(--grijs); margin-bottom:14px; line-height:1.5;">Vul hier op elk moment het actuele saldo van je zakelijke rekening(en) in, met de datum van vandaag. Dit saldo wordt ook door de balans gebruikt bij \u201cBank en kas\u201d.</div>'+
         '<div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">'+
           '<div style="flex:1; min-width:140px;"><label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Saldo (€)</label>'+
-            '<input id="dash-bank" type="number" step="0.01" value="'+((admins[curAdmin]&&admins[curAdmin].actueel_banksaldo!=null)?admins[curAdmin].actueel_banksaldo:"")+'" placeholder="0,00" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); text-align:right;"></div>'+
+            '<input id="dash-bank" type="number" step="0.01" value="'+((admins[curAdmin]&&admins[curAdmin].actueel_banksaldo!=null)?admins[curAdmin].actueel_banksaldo:"")+'" placeholder="0,00" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); text-align:right;">'+
+            '<div id="dash-bank-preview" style="font-size:11px; color:var(--grijs); text-align:right; margin-top:3px; font-variant-numeric:tabular-nums;"></div></div>'+
           '<div style="width:160px;"><label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Per datum</label>'+
             '<input id="dash-bank-datum" type="date" value="'+((admins[curAdmin]&&admins[curAdmin].actueel_banksaldo_datum)?admins[curAdmin].actueel_banksaldo_datum:standaardDatum())+'" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit);"></div>'+
           '<button id="dash-bank-opslaan" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 18px; cursor:pointer;">Opslaan</button>'+
           '<span id="dash-bank-status" style="font-size:11.5px; color:var(--groen);"></span>'+
+        '</div>'+
+        '<div style="border-top:1px solid var(--rand-licht); margin-top:16px; padding-top:14px;">'+
+          '<div style="font-size:11px; color:var(--grijs); margin-bottom:8px;">Rekenmachine — handig om bijvoorbeeld saldi van meerdere rekeningen op te tellen.</div>'+
+          '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">'+
+            '<input id="calc-scherm" type="text" readonly value="0" style="flex:1; min-width:160px; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:15px; background:var(--papier); text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:var(--navy);">'+
+            '<button id="calc-naar-saldo" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:8px; font-size:11.5px; font-weight:600; padding:9px 12px; cursor:pointer; white-space:nowrap;">→ naar saldo</button>'+
+          '</div>'+
+          '<div id="calc-knoppen" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:8px; max-width:280px;">'+
+            ['C','←','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','=',''].map(function(k){
+              if(k==='') return '<span></span>';
+              var isOp = ('÷×−+=%'.indexOf(k) >= 0);
+              var isWis = (k==='C'||k==='←');
+              var bg = isOp ? 'var(--navy)' : (isWis ? 'var(--papier)' : 'var(--wit)');
+              var kl = isOp ? 'var(--papier)' : 'var(--inkt)';
+              return '<button class="calc-k" data-k="'+k+'" style="padding:11px 0; border:1px solid var(--rand); border-radius:8px; background:'+bg+'; color:'+kl+'; font-size:14px; font-weight:600; cursor:pointer;">'+k+'</button>';
+            }).join("")+
+          '</div>'+
         '</div>'+
       '</div>'+
       '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px;">'+
@@ -1733,6 +1751,63 @@
       document.getElementById('dash-bank-status').textContent = "Opgeslagen ✓";
       setTimeout(function(){ var el=document.getElementById('dash-bank-status'); if(el) el.textContent=""; }, 2500);
     };
+
+    // Meelezend euro-label bij het saldo-veld
+    var dashBankEl = document.getElementById('dash-bank');
+    var dashBankPrev = document.getElementById('dash-bank-preview');
+    function werkBankPreviewBij(){
+      var v = dashBankEl.value;
+      dashBankPrev.textContent = (v==="" ? "" : eur(Number(v)||0));
+    }
+    dashBankEl.oninput = werkBankPreviewBij;
+    werkBankPreviewBij();
+
+    // Rekenmachine
+    (function(){
+      var scherm = document.getElementById('calc-scherm');
+      var invoer = "0";      // wat er getoond wordt
+      var vorig = null;      // vorige waarde
+      var operatie = null;   // gekozen bewerking
+      var reset = false;     // volgende cijfer begint opnieuw
+      function toon(){ scherm.value = invoer; }
+      function reken(a, b, op){
+        a = Number(a); b = Number(b);
+        if(op==='+') return a+b;
+        if(op==='−') return a-b;
+        if(op==='×') return a*b;
+        if(op==='÷') return b===0 ? 0 : a/b;
+        if(op==='%') return a/100;
+        return b;
+      }
+      function druk(k){
+        if(k==='C'){ invoer="0"; vorig=null; operatie=null; reset=false; toon(); return; }
+        if(k==='←'){ invoer = (invoer.length>1) ? invoer.slice(0,-1) : "0"; toon(); return; }
+        if(k==='%'){ invoer = String(Number(invoer)/100); reset=true; toon(); return; }
+        if('÷×−+'.indexOf(k) >= 0){
+          if(operatie && !reset){ var uit0 = reken(vorig, invoer, operatie); invoer = String(Math.round(uit0*100)/100); toon(); }
+          vorig = invoer; operatie = k; reset = true; return;
+        }
+        if(k==='='){
+          if(operatie){ var uit = reken(vorig, invoer, operatie); invoer = String(Math.round(uit*100)/100); operatie=null; vorig=null; reset=true; toon(); }
+          return;
+        }
+        // cijfer of punt
+        if(reset){ invoer = (k==='.') ? "0." : k; reset=false; }
+        else {
+          if(k==='.' && invoer.indexOf('.')>=0) return;
+          invoer = (invoer==="0" && k!=='.') ? k : invoer + k;
+        }
+        toon();
+      }
+      Array.prototype.forEach.call(document.querySelectorAll('.calc-k'), function(b){
+        b.onclick = function(){ druk(b.getAttribute('data-k')); };
+      });
+      document.getElementById('calc-naar-saldo').onclick = function(){
+        var w = Number(invoer)||0;
+        dashBankEl.value = Math.round(w*100)/100;
+        werkBankPreviewBij();
+      };
+    })();
 
     document.getElementById('dash-export').onclick = async function(){
       this.textContent = "Bezig…"; this.disabled = true;
@@ -3549,7 +3624,8 @@
           '<div style="font-size:11px; color:var(--grijs); margin-bottom:12px; line-height:1.5;">Het totale saldo van je zakelijke rekening(en) aan het einde van vorig jaar — dat is de beginstand van '+BOEKJAAR+'. Lees je bankjaaroverzicht van '+(BOEKJAAR-1)+' in, of vul het bedrag zelf in. Dit legt vast waar je het jaar mee begon.</div>'+
           '<div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:12px;">'+
             '<div style="flex:1;"><label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Beginsaldo per 31-12-'+(BOEKJAAR-1)+' (€)</label>'+
-              '<input id="bk-bank" type="number" step="0.01" value="'+(bank!==""&&bank!=null?bank:"")+'" placeholder="0,00" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); text-align:right;"></div>'+
+              '<input id="bk-bank" type="number" step="0.01" value="'+(bank!==""&&bank!=null?bank:"")+'" placeholder="0,00" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); text-align:right;">'+
+              '<div id="bk-bank-preview" style="font-size:11px; color:var(--grijs); text-align:right; margin-top:3px; font-variant-numeric:tabular-nums;"></div></div>'+
           '</div>'+
           '<div id="bk-drop" style="border:1.5px dashed var(--rand); border-radius:8px; padding:12px; text-align:center; cursor:pointer; background:var(--papier); font-size:11px; color:var(--grijs);">Sleep je bankjaaroverzicht van '+(BOEKJAAR-1)+' (PDF) hierheen of klik om te kiezen — de saldi worden als voorstel ingelezen</div>'+
           '<input id="bk-file" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">'+
@@ -3570,6 +3646,13 @@
       '</div>';
 
     var gekozenBank = null;
+    // Meelezend euro-label bij het beginsaldo-veld
+    (function(){
+      var el = document.getElementById('bk-bank');
+      var prev = document.getElementById('bk-bank-preview');
+      function bij(){ prev.textContent = (el.value==="" ? "" : eur(Number(el.value)||0)); }
+      el.oninput = bij; bij();
+    })();
     var bkDrop = document.getElementById('bk-drop');
     bkDrop.onclick = function(){ document.getElementById('bk-file').click(); };
     document.getElementById('bk-file').onchange = function(){ if(this.files && this.files[0]){ gekozenBank = this.files[0]; leesBankOverzicht(); } };
