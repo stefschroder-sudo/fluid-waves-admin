@@ -433,6 +433,7 @@
         {id:"omzet",  icon:"trending-up",  label:"Omzet",          groep:"Inkomsten"},
         {id:"inkoop", icon:"file-invoice", label:"Inkoopfacturen", groep:"Uitgaven"},
         {id:"kosten", icon:"cash",         label:"Kosten",         groep:"Uitgaven"},
+        {id:"middelen", icon:"inbox",    label:"Bedrijfsmiddelen", groep:"Bezittingen"},
         {id:"loon",   icon:"users",        label:"Loonstroken",    groep:"Personeel"}
       ]
     },
@@ -1432,6 +1433,12 @@
     if(curView === "invoeren" && (curItem === "omzet" || curItem === "inkoop" || curItem === "kosten")){
       schermEl.innerHTML = '<div class="fw-leeg"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 6V3M12 21v-3M6 12H3M21 12h-3M7.8 7.8L5.6 5.6M18.4 18.4l-2.2-2.2M7.8 16.2l-2.2 2.2M18.4 5.6l-2.2 2.2"/></svg>Laden…</div>';
       await schermBoeking(curItem);
+      return;
+    }
+
+    if(curView === "invoeren" && curItem === "middelen"){
+      schermEl.innerHTML = '<div class="fw-leeg">Laden…</div>';
+      await schermMiddelen();
       return;
     }
 
@@ -2821,6 +2828,187 @@
       bonnen:[]
     };
     if(!factuurConcept.regels.length){ factuurConcept.regels = [{soort:"uren", datum:standaardDatum(), omschrijving:"", aantal:0, tarief:0, btw_pct:21}]; }
+  }
+
+  // ── Bedrijfsmiddelen / afschrijvingen ────────────────────────────────────
+  async function laadMiddelen(){
+    if(!curAdmin) return [];
+    var r = await dbClient().from('adm_bedrijfsmiddelen').select('*').eq('administratie_id', curAdmin).order('aanschafdatum', { ascending:false });
+    if(r.error){ console.error(r.error); return []; }
+    return r.data;
+  }
+
+  // Lineaire afschrijving. Berekent jaarbedrag, verstreken jaren t/m einde boekjaar,
+  // cumulatieve afschrijving en de actuele boekwaarde (ondergrens = restwaarde).
+  function afschrijving(m){
+    var aanschaf = Number(m.aanschafwaarde)||0;
+    var rest = Number(m.restwaarde)||0;
+    var duur = Math.max(1, Number(m.levensduur_jaren)||1);
+    var perJaar = Math.round(((aanschaf - rest) / duur) * 100) / 100;
+    // Verstreken jaren: van aanschafdatum tot einde van het gekozen boekjaar
+    var verstreken = 0;
+    if(m.aanschafdatum){
+      var aj = new Date(m.aanschafdatum).getFullYear();
+      verstreken = (BOEKJAAR - aj) + 1;   // in het aanschafjaar telt het eerste jaar mee
+      if(verstreken < 0) verstreken = 0;
+      if(verstreken > duur) verstreken = duur;
+    }
+    var cumulatief = Math.round(perJaar * verstreken * 100) / 100;
+    if(cumulatief > (aanschaf - rest)) cumulatief = aanschaf - rest;
+    var boekwaarde = Math.round((aanschaf - cumulatief) * 100) / 100;
+    var afgeschreven = verstreken >= duur;
+    return { perJaar:perJaar, verstreken:verstreken, duur:duur, cumulatief:cumulatief, boekwaarde:boekwaarde, afgeschreven:afgeschreven };
+  }
+
+  async function schermMiddelen(){
+    var middelen = await laadMiddelen();
+    var totaalBoekwaarde = middelen.reduce(function(s,m){ return s + afschrijving(m).boekwaarde; }, 0);
+
+    var rijen = "";
+    if(!middelen.length){
+      rijen = '<div style="padding:28px; text-align:center; color:var(--grijs); font-size:12.5px;">Nog geen bedrijfsmiddelen. Voeg bijvoorbeeld je laptop of apparatuur toe om de afschrijving en boekwaarde bij te houden.</div>';
+    } else {
+      middelen.forEach(function(m){
+        var a = afschrijving(m);
+        rijen +=
+          '<div class="mid-rij" data-id="'+m.id+'" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-top:1px solid var(--rand-licht); cursor:pointer;">'+
+            '<div style="flex:1; min-width:0;">'+
+              '<div style="font-size:12.5px; font-weight:600; color:var(--navy);">'+ontsnap(m.naam)+(m.bestand_pad?' <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--goud); font-size:12px; vertical-align:middle;"><path d="M15 7l-6.5 6.5a2.5 2.5 0 0 0 3.5 3.5L18 11a5 5 0 0 0-7-7l-6 6a7.5 7.5 0 0 0 10.5 10.5"/></svg>':'')+'</div>'+
+              '<div style="font-size:11px; color:var(--grijs);">Aanschaf '+(m.aanschafdatum||"—")+' · '+eur(m.aanschafwaarde)+' · '+a.duur+' jaar · '+(a.afgeschreven?'volledig afgeschreven':(eur(a.perJaar)+'/jaar'))+'</div>'+
+            '</div>'+
+            '<div style="text-align:right;">'+
+              '<div style="font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--grijs);">Boekwaarde '+BOEKJAAR+'</div>'+
+              '<div style="font-size:13px; font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums;">'+eur(a.boekwaarde)+'</div>'+
+            '</div>'+
+          '</div>';
+      });
+    }
+
+    schermEl.innerHTML =
+      '<div style="max-width:720px;">'+
+        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">'+
+          '<div style="font-size:12px; color:var(--grijs); max-width:70%; line-height:1.5;">Je bedrijfsmiddelen met lineaire afschrijving. De boekwaarde is wat het middel op '+BOEKJAAR+' nog waard is — dat bedrag komt straks op je balans.</div>'+
+          '<button id="mid-nieuw" style="display:inline-flex; align-items:center; gap:7px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:9px 15px; cursor:pointer; flex-shrink:0;">'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Nieuw middel</button>'+
+        '</div>'+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; overflow:hidden;">'+rijen+'</div>'+
+        (middelen.length ? '<div style="display:flex; justify-content:space-between; align-items:center; background:var(--papier); border:1px solid var(--rand); border-radius:10px; padding:11px 16px; margin-top:12px;">'+
+          '<span style="font-size:12px; color:var(--navy); font-weight:600;">Totale boekwaarde '+BOEKJAAR+'</span>'+
+          '<span style="font-size:14px; font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums;">'+eur(totaalBoekwaarde)+'</span>'+
+        '</div>' : '')+
+        '<div style="font-size:10.5px; color:var(--grijs); margin-top:12px; line-height:1.5;">Lineaire afschrijving: (aanschafwaarde − restwaarde) ÷ levensduur = bedrag per jaar. Dit is ter voorbereiding en overzicht; controleer de fiscale afschrijving met je boekhouder.</div>'+
+      '</div>';
+
+    document.getElementById('mid-nieuw').onclick = function(){ middelVenster(null); };
+    Array.prototype.forEach.call(schermEl.querySelectorAll('.mid-rij'), function(row){
+      row.onclick = function(){
+        var m = middelen.filter(function(x){ return x.id === row.getAttribute('data-id'); })[0];
+        if(m) middelVenster(m);
+      };
+    });
+  }
+
+  function middelVenster(mid){
+    var nieuw = !mid;
+    mid = mid || {};
+    var gekozenBestand = null;   // nieuw te uploaden bon
+    var overlay = document.createElement('div');
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2100; padding:20px;";
+    var box = document.createElement('div');
+    box.style.cssText = "width:100%; max-width:480px; max-height:90vh; overflow:auto; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25);";
+    function inp(id, val, ph, type){ return '<input id="'+id+'" type="'+(type||"text")+'" value="'+(val==null?"":String(val)).replace(/"/g,"&quot;")+'" placeholder="'+(ph||"")+'" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit);">'; }
+    function lbl(t){ return '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px; margin-top:11px;">'+t+'</label>'; }
+    box.innerHTML =
+      '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; font-size:13px; font-weight:700; color:#FFFFFF; position:sticky; top:0;">'+(nieuw?"Nieuw bedrijfsmiddel":"Bedrijfsmiddel bewerken")+'</div>'+
+      '<div style="padding:18px;">'+
+        lbl("Naam")+ inp("mid-naam", mid.naam, "bijv. Laptop Dell")+
+        '<div style="display:flex; gap:10px;">'+
+          '<div style="flex:1;">'+lbl("Aanschafwaarde (excl. btw)")+inp("mid-waarde", mid.aanschafwaarde, "1200", "number")+'</div>'+
+          '<div style="width:150px;">'+lbl("Aanschafdatum")+inp("mid-datum", mid.aanschafdatum, "", "date")+'</div>'+
+        '</div>'+
+        '<div style="display:flex; gap:10px;">'+
+          '<div style="flex:1;">'+lbl("Levensduur (jaren)")+inp("mid-duur", mid.levensduur_jaren!=null?mid.levensduur_jaren:5, "5", "number")+'</div>'+
+          '<div style="flex:1;">'+lbl("Restwaarde")+inp("mid-rest", mid.restwaarde!=null?mid.restwaarde:0, "0", "number")+'</div>'+
+        '</div>'+
+        '<div id="mid-preview" style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:8px; padding:10px 12px; margin-top:12px; font-size:11.5px; color:var(--navy);"></div>'+
+        lbl("Aankoopbon (optioneel)")+
+        '<div id="mid-drop" style="border:1.5px dashed var(--rand); border-radius:8px; padding:11px; text-align:center; cursor:pointer; background:var(--wit); font-size:11px; color:var(--grijs);">'+
+          (mid.bestand_pad ? 'Bon aanwezig — kies een nieuw bestand om te vervangen' : 'Klik om een bon te kiezen (pdf, jpg, png)')+
+        '</div>'+
+        '<input id="mid-file" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">'+
+        '<div style="display:flex; gap:8px; align-items:center; margin-top:18px;">'+
+          '<button id="mid-opslaan" style="padding:9px 16px; background:var(--navy); border:1px solid var(--navy); color:var(--papier); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Opslaan</button>'+
+          '<button id="mid-annuleer" style="padding:9px 16px; background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; cursor:pointer;">Annuleren</button>'+
+          (nieuw?'':'<button id="mid-verwijder" style="margin-left:auto; padding:9px 16px; background:transparent; border:1px solid var(--rood); color:var(--rood); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Verwijderen</button>')+
+        '</div>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function sluit(){ if(overlay.parentNode) document.body.removeChild(overlay); }
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) sluit(); });
+    document.getElementById('mid-annuleer').onclick = sluit;
+
+    function werkPreviewBij(){
+      var m = {
+        aanschafwaarde: parseFloat(document.getElementById('mid-waarde').value)||0,
+        restwaarde: parseFloat(document.getElementById('mid-rest').value)||0,
+        levensduur_jaren: parseInt(document.getElementById('mid-duur').value,10)||1,
+        aanschafdatum: document.getElementById('mid-datum').value||null
+      };
+      var a = afschrijving(m);
+      document.getElementById('mid-preview').innerHTML =
+        'Afschrijving <b>'+eur(a.perJaar)+' per jaar</b> over '+a.duur+' jaar. '+
+        (m.aanschafdatum ? 'Boekwaarde op '+BOEKJAAR+': <b>'+eur(a.boekwaarde)+'</b>'+(a.afgeschreven?' (volledig afgeschreven)':'') : 'Vul een aanschafdatum in voor de boekwaarde.');
+    }
+    ['mid-waarde','mid-rest','mid-duur','mid-datum'].forEach(function(id){ document.getElementById(id).oninput = werkPreviewBij; });
+    werkPreviewBij();
+
+    document.getElementById('mid-drop').onclick = function(){ document.getElementById('mid-file').click(); };
+    document.getElementById('mid-file').onchange = function(){
+      if(this.files && this.files[0]){ gekozenBestand = this.files[0]; document.getElementById('mid-drop').textContent = "Gekozen: " + gekozenBestand.name; }
+    };
+
+    document.getElementById('mid-opslaan').onclick = async function(){
+      var naam = document.getElementById('mid-naam').value.trim();
+      if(!naam){ await fwMelding("Geef het bedrijfsmiddel een naam."); return; }
+      this.textContent = "Bezig…"; this.disabled = true;
+      var rec = {
+        naam:naam,
+        aanschafwaarde: parseFloat(document.getElementById('mid-waarde').value)||0,
+        aanschafdatum: document.getElementById('mid-datum').value||null,
+        levensduur_jaren: parseInt(document.getElementById('mid-duur').value,10)||5,
+        restwaarde: parseFloat(document.getElementById('mid-rest').value)||0
+      };
+      // Bon uploaden indien gekozen
+      if(gekozenBestand){
+        var ext = (gekozenBestand.name.split('.').pop()||'bin').toLowerCase();
+        var pad = user.id + "/middel_" + Date.now() + "." + ext;
+        var up = await dbClient().storage.from('adm-bestanden').upload(pad, gekozenBestand, { upsert:true });
+        if(up.error){ await fwMelding("Bon uploaden mislukt: " + up.error.message); this.textContent="Opslaan"; this.disabled=false; return; }
+        rec.bestand_pad = pad;
+      }
+      var r;
+      if(nieuw){
+        rec.user_id = user.id; rec.administratie_id = curAdmin;
+        r = await dbClient().from('adm_bedrijfsmiddelen').insert(rec);
+      } else {
+        r = await dbClient().from('adm_bedrijfsmiddelen').update(rec).eq('id', mid.id);
+      }
+      if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
+      sluit();
+      await schermMiddelen();
+    };
+
+    if(!nieuw){
+      document.getElementById('mid-verwijder').onclick = async function(){
+        sluit();
+        var ok = await fwBevestig("Bedrijfsmiddel \""+mid.naam+"\" verwijderen?", { okLabel:"Verwijderen", annuleerLabel:"Annuleren" });
+        if(!ok) return;
+        var r = await dbClient().from('adm_bedrijfsmiddelen').delete().eq('id', mid.id);
+        if(r.error){ await fwMelding("Verwijderen mislukt: " + r.error.message); return; }
+        await schermMiddelen();
+      };
+    }
   }
 
   async function schermFacturenPlaceholder(){
