@@ -127,6 +127,7 @@
     <div class="fw-top" data-view="btw" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M5 21V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16l-3-2-2 2-2-2-2 2-2-2z"/><path d="M9 9l6 6M9 9.5v-.5M15 15v-.5"/></svg>BTW-aangifte</div>
     <div class="fw-top" data-view="belasting" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 11h.01M15 11h.01"/></svg>Belastingregels</div>
     <div class="fw-top" data-view="resultaat" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 19h16M4 15l4-6 4 3 4-8"/></svg>Resultaat</div>
+    <div class="fw-top" data-view="balans" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 3v18M7 21h10M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0zM3 7h18"/></svg>Balans</div>
     <div class="fw-top" data-view="ib" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>IB-aangifte</div>
   </div>
 
@@ -470,6 +471,13 @@
         {id:"wenv",     icon:"report-money", label:"Winst- en verlies", groep:"Overzicht"},
         {id:"kwartaal", icon:"calendar-stats",label:"Per kwartaal",     groep:"Overzicht"},
         {id:"maand",    icon:"calendar-month",label:"Per maand",        groep:"Overzicht"}
+      ]
+    },
+    balans: {
+      titel:"Balans", actie:null,
+      items:[
+        {id:"overzicht", icon:"scale",      label:"Balans",            groep:"Overzicht"},
+        {id:"kern",      icon:"report-money", label:"Kernposten invoeren", groep:"Invoer"}
       ]
     },
     belasting: {
@@ -1586,6 +1594,12 @@
 
     if(curView === "resultaat"){
       await schermResultaat();
+      return;
+    }
+
+    if(curView === "balans"){
+      if(curItem === "kern"){ await schermBalansKern(); }
+      else { await schermBalans(); }
       return;
     }
 
@@ -3395,6 +3409,224 @@
         await schermLeningen();
       };
     }
+  }
+
+  // ── Balans ───────────────────────────────────────────────────────────────
+  async function laadBalansKern(jaar){
+    if(!curAdmin) return null;
+    var r = await dbClient().from('adm_balans_kern').select('*').eq('administratie_id', curAdmin).eq('jaar', jaar).maybeSingle();
+    if(r.error){ console.error(r.error); return null; }
+    return r.data;
+  }
+
+  async function bewaarBalansKern(jaar, banksaldo, eigenVermogen){
+    var bestaand = await laadBalansKern(jaar);
+    var rec = {
+      administratie_id:curAdmin, user_id:user.id, jaar:jaar,
+      banksaldo:Number(banksaldo)||0,
+      eigen_vermogen:(eigenVermogen===null||eigenVermogen===""||eigenVermogen===undefined) ? null : Number(eigenVermogen),
+      bijgewerkt:new Date().toISOString()
+    };
+    if(bestaand){
+      return await dbClient().from('adm_balans_kern').update(rec).eq('id', bestaand.id);
+    }
+    return await dbClient().from('adm_balans_kern').insert(rec);
+  }
+
+  // Alle balanscijfers voor het gekozen boekjaar verzamelen
+  async function balansCijfers(){
+    // Bezittingen
+    var facturen = await laadFacturen();
+    var debiteuren = facturen
+      .filter(function(f){ return f.status === 'definitief' && f.soort !== 'credit' && !f.betaald; })
+      .reduce(function(s,f){ return s+(Number(f.totaal_incl)||0); }, 0);
+
+    var middelen = await laadMiddelen();
+    var bedrijfsmiddelen = middelen.reduce(function(s,m){ return s + afschrijving(m).boekwaarde; }, 0);
+
+    var posten = await laadBalansposten();
+    var investeringen = 0, leningen = 0;
+    posten.forEach(function(p){
+      var w = leningInJaar(p, BOEKJAAR);
+      if(p.soort === 'investering') investeringen += w.restschuld;
+      else leningen += w.restschuld;
+    });
+
+    var kern = await laadBalansKern(BOEKJAAR);
+    var banksaldo = kern ? (Number(kern.banksaldo)||0) : 0;
+    var eigenVermogen = (kern && kern.eigen_vermogen != null) ? Number(kern.eigen_vermogen) : null;
+
+    // Schulden
+    var inkoop = await laadBoekingen('inkoop');
+    var kosten = await laadBoekingen('kosten');
+    function inJaar(d){ if(!d) return false; return new Date(d).getFullYear() === BOEKJAAR; }
+    var crediteuren = inkoop.concat(kosten)
+      .filter(function(r){ return !r.betaald && inJaar(r.datum); })
+      .reduce(function(s,r){ return s+(Number(r.bedrag_incl)||0); }, 0);
+
+    // Btw-schuld: openstaand jaartotaal
+    var btwSchuld = 0;
+    try {
+      var statusMap = await laadBtwStatus();
+      var type = ritmeVan();
+      var na = aantalPeriodes();
+      for(var p=1; p<=na; p++){
+        var st = statusMap[BOEKJAAR+"-"+type+"-"+p];
+        if(st && st.status === "betaald") continue;
+        btwSchuld += await btwVanPeriode(BOEKJAAR, type, p);
+      }
+    } catch(e){ btwSchuld = 0; }
+    if(btwSchuld < 0) btwSchuld = 0;   // negatief = te ontvangen; dan geen schuld
+
+    var round = function(n){ return Math.round((Number(n)||0)*100)/100; };
+    var activa = round(bedrijfsmiddelen + investeringen + debiteuren + banksaldo);
+    var schuldenExclEV = round(leningen + crediteuren + btwSchuld);
+    var passivaMetEV = eigenVermogen != null ? round(schuldenExclEV + eigenVermogen) : null;
+    var verschil = eigenVermogen != null ? round(activa - passivaMetEV) : round(activa - schuldenExclEV);
+
+    return {
+      bedrijfsmiddelen:round(bedrijfsmiddelen), investeringen:round(investeringen),
+      debiteuren:round(debiteuren), banksaldo:round(banksaldo), activa:activa,
+      leningen:round(leningen), crediteuren:round(crediteuren), btwSchuld:round(btwSchuld),
+      eigenVermogen:eigenVermogen, schuldenExclEV:schuldenExclEV, passivaMetEV:passivaMetEV,
+      verschil:verschil,
+      // Impliciet eigen vermogen als sluitpost (activa - overige schulden)
+      implicietEV: round(activa - schuldenExclEV)
+    };
+  }
+
+  async function schermBalansKern(){
+    var kern = await laadBalansKern(BOEKJAAR);
+    var bank = kern ? kern.banksaldo : "";
+    var ev = (kern && kern.eigen_vermogen != null) ? kern.eigen_vermogen : "";
+
+    schermEl.innerHTML =
+      '<div style="max-width:620px;">'+
+        '<div style="font-size:12px; color:var(--grijs); margin-bottom:16px; line-height:1.5;">De twee standen die je zelf invoert voor de balans van '+BOEKJAAR+'. De rest (debiteuren, crediteuren, btw, bedrijfsmiddelen, leningen) haalt de app uit je administratie.</div>'+
+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:16px;">'+
+          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:4px;">Banksaldo per 31-12-'+BOEKJAAR+'</div>'+
+          '<div style="font-size:11px; color:var(--grijs); margin-bottom:12px; line-height:1.5;">Het totale saldo van je zakelijke rekening(en) op de laatste dag van het jaar. Lees je bankjaaroverzicht in, of vul het bedrag zelf in.</div>'+
+          '<div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:12px;">'+
+            '<div style="flex:1;"><label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Banksaldo (€)</label>'+
+              '<input id="bk-bank" type="number" step="0.01" value="'+(bank!==""&&bank!=null?bank:"")+'" placeholder="0,00" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); text-align:right;"></div>'+
+          '</div>'+
+          '<div id="bk-drop" style="border:1.5px dashed var(--rand); border-radius:8px; padding:12px; text-align:center; cursor:pointer; background:var(--papier); font-size:11px; color:var(--grijs);">Sleep je bankjaaroverzicht (PDF) hierheen of klik om te kiezen — de saldi worden als voorstel ingelezen</div>'+
+          '<input id="bk-file" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">'+
+        '</div>'+
+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:16px;">'+
+          '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:4px;">Eigen vermogen</div>'+
+          '<div style="font-size:11px; color:var(--grijs); margin-bottom:12px; line-height:1.5;">Het eigen vermogen van je onderneming, bijvoorbeeld van je vorige jaarrekening. Laat leeg als je het nog niet weet — dan toont de balans het verschil als \u201cnog in te vullen\u201d.</div>'+
+          '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px;">Eigen vermogen (€)</label>'+
+          '<input id="bk-ev" type="number" step="0.01" value="'+(ev!==""&&ev!=null?ev:"")+'" placeholder="laat leeg indien onbekend" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit); text-align:right;">'+
+        '</div>'+
+
+        '<div style="display:flex; gap:10px; align-items:center;">'+
+          '<button id="bk-opslaan" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 20px; cursor:pointer;">Opslaan</button>'+
+          '<button id="bk-naar-balans" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 16px; cursor:pointer;">Naar de balans</button>'+
+          '<span id="bk-status" style="font-size:11.5px; color:var(--groen);"></span>'+
+        '</div>'+
+      '</div>';
+
+    var gekozenBank = null;
+    var bkDrop = document.getElementById('bk-drop');
+    bkDrop.onclick = function(){ document.getElementById('bk-file').click(); };
+    document.getElementById('bk-file').onchange = function(){ if(this.files && this.files[0]){ gekozenBank = this.files[0]; leesBankOverzicht(); } };
+    bkDrop.ondragover = function(e){ e.preventDefault(); bkDrop.style.borderColor="var(--goud)"; bkDrop.style.background="#FBF6E6"; };
+    bkDrop.ondragleave = function(e){ e.preventDefault(); bkDrop.style.borderColor="var(--rand)"; bkDrop.style.background="var(--papier)"; };
+    bkDrop.ondrop = function(e){ e.preventDefault(); bkDrop.style.borderColor="var(--rand)"; bkDrop.style.background="var(--papier)"; if(e.dataTransfer.files && e.dataTransfer.files[0]){ gekozenBank = e.dataTransfer.files[0]; leesBankOverzicht(); } };
+
+    async function leesBankOverzicht(){
+      bkDrop.textContent = gekozenBank.name + " — wordt gelezen…";
+      try {
+        var base64 = await new Promise(function(res, rej){ var fr=new FileReader(); fr.onload=function(){res(String(fr.result).split(",")[1]);}; fr.onerror=rej; fr.readAsDataURL(gekozenBank); });
+        var mt = gekozenBank.type || (gekozenBank.name.toLowerCase().endsWith('.pdf')?'application/pdf':'image/jpeg');
+        var r = await fetch("/api/extract", { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify({ soort:"bank", media_type:mt, data:base64 }) });
+        var uit = await r.json();
+        if(uit.verbruik) logApiKosten("bankoverzicht inlezen", uit.verbruik);
+        if(uit.ok && uit.velden && uit.velden.banksaldo != null){
+          document.getElementById('bk-bank').value = uit.velden.banksaldo;
+          bkDrop.textContent = gekozenBank.name + " — saldo ingelezen, controleer het bedrag";
+        } else {
+          bkDrop.textContent = gekozenBank.name + " — kon het saldo niet automatisch lezen, vul zelf in";
+        }
+      } catch(e){
+        bkDrop.textContent = gekozenBank.name + " — lezen niet beschikbaar, vul zelf in";
+      }
+    }
+
+    document.getElementById('bk-opslaan').onclick = async function(){
+      this.textContent = "Bezig…"; this.disabled = true;
+      var bankVal = document.getElementById('bk-bank').value;
+      var evVal = document.getElementById('bk-ev').value;
+      var r = await bewaarBalansKern(BOEKJAAR, bankVal, evVal === "" ? null : evVal);
+      this.textContent = "Opslaan"; this.disabled = false;
+      if(r && r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); return; }
+      document.getElementById('bk-status').textContent = "Opgeslagen ✓";
+      setTimeout(function(){ var el=document.getElementById('bk-status'); if(el) el.textContent=""; }, 2500);
+    };
+    document.getElementById('bk-naar-balans').onclick = async function(){
+      // eerst opslaan, dan naar de balans
+      await bewaarBalansKern(BOEKJAAR, document.getElementById('bk-bank').value, document.getElementById('bk-ev').value || null);
+      curItem = "overzicht"; renderNav(); await renderScherm();
+    };
+  }
+
+  async function schermBalans(){
+    var c = await balansCijfers();
+    function regel(label, bedrag, opts){
+      opts = opts || {};
+      return '<div style="display:flex; justify-content:space-between; align-items:baseline; padding:'+(opts.groot?"10px":"7px")+' 0; '+(opts.lijn?"border-top:1px solid var(--rand-licht);":"")+(opts.dubbel?"border-top:2px solid var(--navy); margin-top:4px;":"")+'">'+
+        '<span style="font-size:'+(opts.groot?"13px":"12px")+'; '+(opts.vet?"font-weight:700; color:var(--navy);":"color:var(--inkt);")+'">'+label+'</span>'+
+        '<span style="font-size:'+(opts.groot?"14px":"12px")+'; '+(opts.vet?"font-weight:700;":"")+' color:'+(opts.kleur||"var(--inkt)")+'; font-variant-numeric:tabular-nums;">'+eur(bedrag)+'</span>'+
+      '</div>';
+    }
+
+    var sluit = (c.eigenVermogen != null) && Math.abs(c.verschil) < 0.01;
+    var evOnbekend = (c.eigenVermogen == null);
+
+    // Signaalblok
+    var signaal;
+    if(evOnbekend){
+      signaal = '<div style="background:#FBF6E6; border:1px solid var(--goud); border-radius:10px; padding:14px 16px; margin-bottom:18px;">'+
+        '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:3px;">Eigen vermogen nog niet ingevuld</div>'+
+        '<div style="font-size:11.5px; color:var(--inkt); line-height:1.5;">Op basis van je bezittingen en schulden zou je eigen vermogen <b>'+eur(c.implicietEV)+'</b> moeten zijn (bezittingen min schulden). Vul je werkelijke eigen vermogen in bij \u201cKernposten\u201d om te zien of de balans sluit.</div></div>';
+    } else if(sluit){
+      signaal = '<div style="background:#F1F6F1; border:1px solid var(--groen); border-radius:10px; padding:14px 16px; margin-bottom:18px;">'+
+        '<div style="font-size:12px; font-weight:700; color:var(--groen); margin-bottom:3px;">De balans sluit ✓</div>'+
+        '<div style="font-size:11.5px; color:var(--inkt); line-height:1.5;">Bezittingen en passiva zijn gelijk ('+eur(c.activa)+'). Je administratie is in evenwicht.</div></div>';
+    } else {
+      signaal = '<div style="background:#FBEDEA; border:1px solid var(--rood); border-radius:10px; padding:14px 16px; margin-bottom:18px;">'+
+        '<div style="font-size:12px; font-weight:700; color:var(--rood); margin-bottom:3px;">De balans sluit nog niet</div>'+
+        '<div style="font-size:11.5px; color:var(--inkt); line-height:1.5;">Er is een verschil van <b>'+eur(Math.abs(c.verschil))+'</b> tussen bezittingen ('+eur(c.activa)+') en passiva ('+eur(c.passivaMetEV)+'). Dat betekent dat er nog iets ontbreekt of afwijkt — controleer je banksaldo, eigen vermogen en of alle posten kloppen.</div></div>';
+    }
+
+    schermEl.innerHTML =
+      '<div style="max-width:820px;">'+
+        signaal+
+        '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">'+
+          // Bezittingen
+          '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px;">'+
+            '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700; margin-bottom:8px;">Bezittingen (activa)</div>'+
+            regel("Bedrijfsmiddelen (boekwaarde)", c.bedrijfsmiddelen, {lijn:true})+
+            (c.investeringen>0?regel("Investeringen", c.investeringen, {lijn:true}):"")+
+            regel("Debiteuren (openstaande facturen)", c.debiteuren, {lijn:true})+
+            regel("Bank en kas", c.banksaldo, {lijn:true})+
+            regel("Totaal bezittingen", c.activa, {dubbel:true, vet:true, groot:true})+
+          '</div>'+
+          // Passiva
+          '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px;">'+
+            '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700; margin-bottom:8px;">Schulden & eigen vermogen (passiva)</div>'+
+            regel("Eigen vermogen", (c.eigenVermogen!=null?c.eigenVermogen:c.implicietEV), {lijn:true, kleur:(evOnbekend?"var(--grijs)":"var(--inkt)")})+
+            (c.leningen>0?regel("Leningen", c.leningen, {lijn:true}):"")+
+            regel("Crediteuren (nog te betalen)", c.crediteuren, {lijn:true})+
+            regel("Btw-schuld", c.btwSchuld, {lijn:true})+
+            regel("Totaal passiva", (c.passivaMetEV!=null?c.passivaMetEV:c.activa), {dubbel:true, vet:true, groot:true})+
+          '</div>'+
+        '</div>'+
+        '<div style="font-size:10.5px; color:var(--grijs); margin-top:16px; line-height:1.5;">Dit is een hulpmiddel voor overzicht en voorbereiding, geen officiële jaarrekening — controleer de balans met je boekhouder. De balans hoort per '+BOEKJAAR+'-12-31 en toont de standen voor het gekozen boekjaar. Pas de kernposten (banksaldo, eigen vermogen) aan bij \u201cKernposten invoeren\u201d.</div>'+
+      '</div>';
   }
 
   async function schermFacturenPlaceholder(){
