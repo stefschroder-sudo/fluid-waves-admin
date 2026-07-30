@@ -1092,12 +1092,19 @@
       html += '<div style="border:1px solid var(--rand-licht); border-radius:10px; overflow:hidden;">';
       rows.forEach(function(r, i){
         var actief = (r.id === bewerkId);
+        var betaaldKnop = "";
+        if(soort === "inkoop" || soort === "kosten"){
+          betaaldKnop = r.betaald
+            ? '<button class="bk-betaald" data-id="'+r.id+'" data-betaald="1" title="Betaald op '+(r.betaald_datum||"")+' — klik om terug te zetten" style="flex-shrink:0; font-size:9.5px; font-weight:700; color:var(--groen); background:#F1F6F1; border:1px solid var(--groen); border-radius:5px; padding:3px 8px; cursor:pointer;">✓ Betaald</button>'
+            : '<button class="bk-betaald" data-id="'+r.id+'" data-betaald="0" title="Markeer als betaald" style="flex-shrink:0; font-size:9.5px; font-weight:700; color:var(--grijs); background:transparent; border:1px solid var(--rand); border-radius:5px; padding:3px 8px; cursor:pointer;">Te betalen</button>';
+        }
         html +=
           '<div data-edit="'+r.id+'" style="display:flex; align-items:center; gap:10px; padding:9px 12px; font-size:12.5px; cursor:pointer; '+(actief?'background:#FBF6E6;':'')+(i?'border-top:1px solid var(--rand-licht);':'')+'">'+
             '<span style="width:82px; flex-shrink:0; color:var(--grijs);">'+(r.datum||'—')+'</span>'+
             '<span style="flex:1; min-width:0; font-weight:600; color:var(--inkt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+(r.naam||'—')+(r.omschrijving?' <span style="font-weight:400; color:var(--grijs);">· '+r.omschrijving+'</span>':'')+'</span>'+
             '<span style="width:100px; flex-shrink:0; text-align:right;">'+eur(r.bedrag_excl)+'</span>'+
             '<span style="width:64px; flex-shrink:0; text-align:right; color:var(--grijs);">'+r.btw_pct+'% btw</span>'+
+            betaaldKnop+
             '<span style="width:22px; flex-shrink:0; text-align:center;">'+(r.bestand_pad ? '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--goud); font-size:15px;" data-title="Bewijsstuk openen" data-bestand="'+r.bestand_pad+'"><path d="M15 7l-6.5 6.5a2.5 2.5 0 0 0 3.5 3.5L18 11a5 5 0 0 0-7-7l-6 6a7.5 7.5 0 0 0 10.5 10.5"/></svg>' : '')+'</span>'+
             '<button data-del="'+r.id+'" title="Verwijderen" style="width:22px; flex-shrink:0; background:none; border:none; color:var(--rood); cursor:pointer; font-size:15px; padding:0;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/></svg></button>'+
           '</div>';
@@ -1353,10 +1360,22 @@
 
     Array.prototype.forEach.call(schermEl.querySelectorAll('[data-edit]'), function(rij){
       rij.onclick = async function(e){
-        if(e.target.closest('[data-del]') || e.target.closest('[data-bestand]')) return;
+        if(e.target.closest('[data-del]') || e.target.closest('[data-bestand]') || e.target.closest('.bk-betaald')) return;
         bewerkId = rij.getAttribute('data-edit');
         await renderScherm();
         schermEl.scrollIntoView({behavior:"smooth", block:"start"});
+      };
+    });
+
+    Array.prototype.forEach.call(schermEl.querySelectorAll('.bk-betaald'), function(b){
+      b.onclick = async function(e){
+        e.stopPropagation();
+        var nu = b.getAttribute('data-betaald') === "1";
+        var wordt = !nu;
+        var upd = { betaald:wordt, betaald_datum: wordt ? new Date().toISOString().slice(0,10) : null };
+        var r = await dbClient().from('adm_boekingen').update(upd).eq('id', b.getAttribute('data-id'));
+        if(r.error){ await fwMelding("Bijwerken mislukt: " + r.error.message); return; }
+        await renderScherm();
       };
     });
 
@@ -1476,12 +1495,55 @@
     var kostenTot = inkoop.concat(kosten).reduce(function(s,r){return s+(Number(r.bedrag_excl)||0);},0);
     var aantal = omzet.length + inkoop.length + kosten.length;
 
+    // ── Openstaande posten (periode-gebonden op datum) ──
+    var facturen = await laadFacturen();
+    function inSelF(d){ return inSel(d); }
+    // Offertes open: niet-definitieve facturen met factuurdatum in de periode, incl. btw
+    var offertesOpen = facturen
+      .filter(function(f){ return f.status !== 'definitief' && inSelF(f.factuurdatum); })
+      .reduce(function(s,f){ return s+(Number(f.totaal_incl)||0); }, 0);
+    // Debiteuren: definitieve gewone facturen, nog niet betaald, incl. btw
+    var debiteuren = facturen
+      .filter(function(f){ return f.status === 'definitief' && f.soort !== 'credit' && !f.betaald && inSelF(f.factuurdatum); })
+      .reduce(function(s,f){ return s+(Number(f.totaal_incl)||0); }, 0);
+    // Crediteuren: inkoop/kosten nog niet betaald, incl. btw
+    var crediteuren = inkoop.concat(kosten)
+      .filter(function(r){ return !r.betaald; })
+      .reduce(function(s,r){ return s+(Number(r.bedrag_incl)||0); }, 0);
+    // Btw nog te betalen: saldo over de periodes die in de selectie vallen (openstaand)
+    var btwOpen = 0;
+    try {
+      var statusMap = await laadBtwStatus();
+      var type = ritmeVan();
+      // welke btw-periodes raken de geselecteerde maanden?
+      var perSet = {};
+      info.maanden.forEach(function(m){
+        var pnr = (type === 'maand') ? m : Math.ceil(m/3);
+        perSet[pnr] = true;
+      });
+      var pers = Object.keys(perSet);
+      for(var pi=0; pi<pers.length; pi++){
+        var pnr2 = parseInt(pers[pi],10);
+        var st = statusMap[BOEKJAAR+"-"+type+"-"+pnr2];
+        if(st && st.status === "betaald") continue;
+        btwOpen += await btwVanPeriode(BOEKJAAR, type, pnr2);
+      }
+    } catch(e){ btwOpen = 0; }
+
     schermEl.innerHTML =
       '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:18px;">'+
         kpi("Omzet · "+info.label, euroStr(omzetTot))+
         kpi("Kosten · "+info.label, euroStr(kostenTot))+
         kpi("Resultaat", euroStr(omzetTot-kostenTot))+
       '</div>'+
+      '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700; margin-bottom:8px;">Openstaand · '+info.label+'</div>'+
+      '<div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; margin-bottom:8px;">'+
+        openVak("Offertes open", offertesOpen, "Voorstellen die nog niet zijn omgezet naar een factuur.")+
+        openVak("Nog te ontvangen", debiteuren, "Verstuurde facturen die klanten nog moeten betalen (debiteuren).")+
+        openVak("Btw te betalen", btwOpen, "Nog af te dragen btw over deze periode.")+
+        openVak("Nog te betalen", crediteuren, "Inkoop en kosten die jij nog moet betalen (crediteuren).")+
+      '</div>'+
+      '<div style="font-size:10.5px; color:var(--grijs); margin-bottom:18px; line-height:1.5;">Deze bedragen bewegen mee met de gekozen periode ('+info.label+'). Kies bovenin een andere periode of het hele jaar voor een ander beeld.</div>'+
       '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px;">'+
         '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:4px;">Exporteren</div>'+
         '<div style="font-size:12px; color:var(--grijs); margin-bottom:14px;">Genereert een Excel-bestand met vier tabbladen — btw-aangifte, omzet, inkoop en kosten, en herkomst per bestand — voor de nu gekozen periode ('+info.label+'). '+aantal+' regel'+(aantal!==1?'s':'')+' in beeld.</div>'+
@@ -1497,6 +1559,13 @@
       catch(e){ await fwMelding("Export mislukt: " + (e.message||e)); }
       await renderScherm();
     };
+  }
+  function openVak(label, waarde, uitleg){
+    return '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:10px; padding:13px 15px;">'+
+      '<div style="font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--grijs); font-weight:600; margin-bottom:5px;">'+label+'</div>'+
+      '<div style="font-size:18px; font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums;">'+euroStr(waarde)+'</div>'+
+      '<div style="font-size:10px; color:var(--grijs); margin-top:5px; line-height:1.4;">'+uitleg+'</div>'+
+    '</div>';
   }
   function kpi(label, waarde){
     return '<div style="background:var(--navy); border-radius:10px; padding:14px 16px;">'+
