@@ -2973,7 +2973,7 @@
     var midDrop = document.getElementById('mid-drop');
     midDrop.onclick = function(){ document.getElementById('mid-file').click(); };
     document.getElementById('mid-file').onchange = function(){
-      if(this.files && this.files[0]){ gekozenBestand = this.files[0]; midDrop.textContent = "Gekozen: " + gekozenBestand.name; }
+      if(this.files && this.files[0]){ gekozenBestand = this.files[0]; midDrop.textContent = "Gekozen: " + gekozenBestand.name; herkenMiddelBon(); }
     };
     // Slepen en neerzetten
     midDrop.ondragover = function(e){ e.preventDefault(); midDrop.style.borderColor = "var(--goud)"; midDrop.style.background = "#FBF6E6"; };
@@ -2984,8 +2984,43 @@
       if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]){
         gekozenBestand = e.dataTransfer.files[0];
         midDrop.textContent = "Gekozen: " + gekozenBestand.name;
+        herkenMiddelBon();
       }
     };
+
+    // Bon uitlezen: vult aanschafwaarde en datum als voorstel, jij vult de rest aan
+    async function herkenMiddelBon(){
+      if(!gekozenBestand) return;
+      var waardeEl = document.getElementById('mid-waarde');
+      var datumEl = document.getElementById('mid-datum');
+      var naamEl = document.getElementById('mid-naam');
+      midDrop.textContent = gekozenBestand.name + " — wordt gelezen…";
+      try {
+        var base64 = await new Promise(function(res, rej){
+          var fr = new FileReader();
+          fr.onload = function(){ res(String(fr.result).split(",")[1]); };
+          fr.onerror = rej; fr.readAsDataURL(gekozenBestand);
+        });
+        var mt = gekozenBestand.type || (gekozenBestand.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+        var r = await fetch("/api/extract", {
+          method:"POST", headers:{ "content-type":"application/json" },
+          body: JSON.stringify({ soort:"inkoop", media_type:mt, data:base64 })
+        });
+        var uit = await r.json();
+        if(uit.ok && uit.velden){
+          var v = uit.velden;
+          if(v.bedrag_excl != null && !waardeEl.value){ waardeEl.value = v.bedrag_excl; }
+          if(v.datum && !datumEl.value){ datumEl.value = v.datum; }
+          if(v.naam && !naamEl.value){ naamEl.value = v.naam; }
+          werkPreviewBij();
+          midDrop.textContent = gekozenBestand.name + " — gelezen, controleer de waarde en datum";
+        } else {
+          midDrop.textContent = gekozenBestand.name + " — automatisch lezen lukte niet, vul zelf in";
+        }
+      } catch(err){
+        midDrop.textContent = gekozenBestand.name + " — gekozen (lezen niet beschikbaar)";
+      }
+    }
 
     document.getElementById('mid-opslaan').onclick = async function(){
       var naam = document.getElementById('mid-naam').value.trim();
