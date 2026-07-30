@@ -2940,7 +2940,7 @@
         '<div id="mid-preview" style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:8px; padding:10px 12px; margin-top:12px; font-size:11.5px; color:var(--navy);"></div>'+
         lbl("Aankoopbon (optioneel)")+
         '<div id="mid-drop" style="border:1.5px dashed var(--rand); border-radius:8px; padding:11px; text-align:center; cursor:pointer; background:var(--wit); font-size:11px; color:var(--grijs);">'+
-          (mid.bestand_pad ? 'Bon aanwezig — kies een nieuw bestand om te vervangen' : 'Klik om een bon te kiezen (pdf, jpg, png)')+
+          (mid.bestand_pad ? 'Bon aanwezig — sleep of klik om een nieuw bestand te kiezen' : 'Sleep een bon hierheen of klik om te kiezen (pdf, jpg, png)')+
         '</div>'+
         '<input id="mid-file" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">'+
         '<div style="display:flex; gap:8px; align-items:center; margin-top:18px;">'+
@@ -2970,9 +2970,21 @@
     ['mid-waarde','mid-rest','mid-duur','mid-datum'].forEach(function(id){ document.getElementById(id).oninput = werkPreviewBij; });
     werkPreviewBij();
 
-    document.getElementById('mid-drop').onclick = function(){ document.getElementById('mid-file').click(); };
+    var midDrop = document.getElementById('mid-drop');
+    midDrop.onclick = function(){ document.getElementById('mid-file').click(); };
     document.getElementById('mid-file').onchange = function(){
-      if(this.files && this.files[0]){ gekozenBestand = this.files[0]; document.getElementById('mid-drop').textContent = "Gekozen: " + gekozenBestand.name; }
+      if(this.files && this.files[0]){ gekozenBestand = this.files[0]; midDrop.textContent = "Gekozen: " + gekozenBestand.name; }
+    };
+    // Slepen en neerzetten
+    midDrop.ondragover = function(e){ e.preventDefault(); midDrop.style.borderColor = "var(--goud)"; midDrop.style.background = "#FBF6E6"; };
+    midDrop.ondragleave = function(e){ e.preventDefault(); midDrop.style.borderColor = "var(--rand)"; midDrop.style.background = "var(--wit)"; };
+    midDrop.ondrop = function(e){
+      e.preventDefault();
+      midDrop.style.borderColor = "var(--rand)"; midDrop.style.background = "var(--wit)";
+      if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]){
+        gekozenBestand = e.dataTransfer.files[0];
+        midDrop.textContent = "Gekozen: " + gekozenBestand.name;
+      }
     };
 
     document.getElementById('mid-opslaan').onclick = async function(){
