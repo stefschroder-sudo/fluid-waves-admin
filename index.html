@@ -750,6 +750,102 @@
   btn.onclick = function(e){ e.stopPropagation(); panel.style.display==="block" ? closePanel() : openPanel(); };
   document.addEventListener('click', function(){ if(panel.style.display==="block") closePanel(); });
 
+  // ── Verborgen beheerscherm: Ctrl+S, pincode 2208 ─────────────────────────
+  document.addEventListener('keydown', function(e){
+    if((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')){
+      e.preventDefault();
+      openBeheer();
+    }
+  });
+
+  async function openBeheer(){
+    var pin = await fwVraag("Beheer — voer de pincode in:", "", "Beheer");
+    if(pin === null) return;
+    if(pin.trim() !== "2208"){ await fwMelding("Onjuiste pincode."); return; }
+    await toonBeheer();
+  }
+
+  async function toonBeheer(){
+    // Alle logregels van deze eigenaar ophalen
+    var r = await dbClient().from('adm_api_log').select('*').order('aangemaakt', { ascending:false });
+    var rijen = (r.error || !r.data) ? [] : r.data;
+
+    var totaalKosten = 0, totaalAanroepen = rijen.length, totInTok = 0, totUitTok = 0;
+    var perFunctie = {};   // functie -> {n, kosten, inTok, uitTok}
+    var perUser = {};      // user_id -> {n, kosten}
+    rijen.forEach(function(x){
+      var k = Number(x.kosten_usd)||0;
+      totaalKosten += k; totInTok += Number(x.input_tokens)||0; totUitTok += Number(x.output_tokens)||0;
+      var f = x.functie || "onbekend";
+      if(!perFunctie[f]) perFunctie[f] = { n:0, kosten:0, inTok:0, uitTok:0 };
+      perFunctie[f].n++; perFunctie[f].kosten += k; perFunctie[f].inTok += Number(x.input_tokens)||0; perFunctie[f].uitTok += Number(x.output_tokens)||0;
+      var u = x.user_id || "onbekend";
+      if(!perUser[u]) perUser[u] = { n:0, kosten:0 };
+      perUser[u].n++; perUser[u].kosten += k;
+    });
+
+    function usd(n){ return "$" + (Number(n)||0).toLocaleString('en-US', {minimumFractionDigits:4, maximumFractionDigits:4}); }
+    function usd2(n){ return "$" + (Number(n)||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+    var functieHtml = Object.keys(perFunctie).sort(function(a,b){ return perFunctie[b].kosten - perFunctie[a].kosten; }).map(function(f){
+      var d = perFunctie[f];
+      var gem = d.n ? d.kosten/d.n : 0;
+      return '<tr style="border-top:1px solid var(--rand-licht);">'+
+        '<td style="padding:7px 8px; font-size:11.5px;">'+f+'</td>'+
+        '<td style="padding:7px 8px; text-align:right; font-size:11.5px;">'+d.n+'</td>'+
+        '<td style="padding:7px 8px; text-align:right; font-size:11.5px; color:var(--grijs);">'+usd(gem)+'</td>'+
+        '<td style="padding:7px 8px; text-align:right; font-size:11.5px; font-weight:600;">'+usd(d.kosten)+'</td>'+
+      '</tr>';
+    }).join("");
+
+    var userHtml = Object.keys(perUser).sort(function(a,b){ return perUser[b].kosten - perUser[a].kosten; }).map(function(u){
+      var d = perUser[u];
+      var kort = u.length > 12 ? u.slice(0,8)+"…" : u;
+      var isJij = (u === user.id);
+      return '<tr style="border-top:1px solid var(--rand-licht);">'+
+        '<td style="padding:7px 8px; font-size:11.5px; font-family:monospace;">'+kort+(isJij?' <span style="color:var(--goud); font-weight:700;">(jij)</span>':'')+'</td>'+
+        '<td style="padding:7px 8px; text-align:right; font-size:11.5px;">'+d.n+'</td>'+
+        '<td style="padding:7px 8px; text-align:right; font-size:11.5px; font-weight:600;">'+usd(d.kosten)+'</td>'+
+      '</tr>';
+    }).join("");
+
+    var gemAanroep = totaalAanroepen ? totaalKosten/totaalAanroepen : 0;
+
+    var overlay = document.createElement('div');
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.55); display:flex; align-items:center; justify-content:center; z-index:2300; padding:16px;";
+    var box = document.createElement('div');
+    box.style.cssText = "width:100%; max-width:640px; max-height:90vh; overflow:auto; background:var(--papier); border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.3);";
+    box.innerHTML =
+      '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0;">'+
+        '<span style="font-size:13px; font-weight:700; color:#fff;">Beheer — API-kosten</span>'+
+        '<button id="beh-sluit" style="background:none; border:none; color:#fff; cursor:pointer; font-size:18px;">&times;</button>'+
+      '</div>'+
+      '<div style="padding:18px;">'+
+        '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:18px;">'+
+          '<div style="background:var(--navy); border-radius:10px; padding:12px 14px;"><div style="font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--goud); margin-bottom:4px;">Totale kosten</div><div style="font-size:18px; font-weight:700; color:var(--papier);">'+usd2(totaalKosten)+'</div></div>'+
+          '<div style="background:var(--navy); border-radius:10px; padding:12px 14px;"><div style="font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--goud); margin-bottom:4px;">Aanroepen</div><div style="font-size:18px; font-weight:700; color:var(--papier);">'+totaalAanroepen+'</div></div>'+
+          '<div style="background:var(--navy); border-radius:10px; padding:12px 14px;"><div style="font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--goud); margin-bottom:4px;">Gem. per aanroep</div><div style="font-size:18px; font-weight:700; color:var(--papier);">'+usd(gemAanroep)+'</div></div>'+
+        '</div>'+
+        '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--goud); font-weight:700; margin-bottom:6px;">Per functie</div>'+
+        '<table style="width:100%; border-collapse:collapse; background:var(--wit); border:1px solid var(--rand-licht); border-radius:10px; overflow:hidden; margin-bottom:18px;">'+
+          '<tr style="background:var(--papier);"><th style="padding:7px 8px; text-align:left; font-size:9px; text-transform:uppercase; color:var(--grijs);">Functie</th><th style="padding:7px 8px; text-align:right; font-size:9px; text-transform:uppercase; color:var(--grijs);">Aanroepen</th><th style="padding:7px 8px; text-align:right; font-size:9px; text-transform:uppercase; color:var(--grijs);">Gemiddeld</th><th style="padding:7px 8px; text-align:right; font-size:9px; text-transform:uppercase; color:var(--grijs);">Totaal</th></tr>'+
+          (functieHtml || '<tr><td colspan="4" style="padding:14px; text-align:center; font-size:11.5px; color:var(--grijs);">Nog geen AI-aanroepen geregistreerd.</td></tr>')+
+        '</table>'+
+        '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--goud); font-weight:700; margin-bottom:6px;">Per gebruiker</div>'+
+        '<table style="width:100%; border-collapse:collapse; background:var(--wit); border:1px solid var(--rand-licht); border-radius:10px; overflow:hidden;">'+
+          '<tr style="background:var(--papier);"><th style="padding:7px 8px; text-align:left; font-size:9px; text-transform:uppercase; color:var(--grijs);">Gebruiker</th><th style="padding:7px 8px; text-align:right; font-size:9px; text-transform:uppercase; color:var(--grijs);">Aanroepen</th><th style="padding:7px 8px; text-align:right; font-size:9px; text-transform:uppercase; color:var(--grijs);">Kosten</th></tr>'+
+          (userHtml || '<tr><td colspan="3" style="padding:14px; text-align:center; font-size:11.5px; color:var(--grijs);">Nog geen data.</td></tr>')+
+        '</table>'+
+        '<div style="font-size:10px; color:var(--grijs); margin-top:14px; line-height:1.5;">Kosten in USD op basis van het werkelijke tokengebruik (Sonnet 4.5: $3/M input, $15/M output). Je ziet nu alleen je eigen data; met meerdere gebruikers verschijnt hier ieders verbruik. Totaal '+totInTok.toLocaleString('nl-NL')+' input- en '+totUitTok.toLocaleString('nl-NL')+' output-tokens.</div>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function sluit(){ if(overlay.parentNode) document.body.removeChild(overlay); }
+    document.getElementById('beh-sluit').onclick = sluit;
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) sluit(); });
+  }
+
+
   document.getElementById('fw-nieuw').onclick = async function(e){
     e.stopPropagation();
     var naam = await fwVraag("Naam van de nieuwe administratie:", "");
@@ -998,6 +1094,30 @@
   function eur(n){ return "€ " + (Number(n)||0).toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
   // Boekingen van de actieve administratie + soort laden
+  // ── API-kosten loggen ────────────────────────────────────────────────────
+  // Prijzen per miljoen tokens (USD). Pas aan als de tarieven wijzigen.
+  var API_PRIJZEN = {
+    "claude-sonnet-4-5": { input: 3.00, output: 15.00 }
+  };
+  function berekenKosten(model, inTok, outTok){
+    var p = API_PRIJZEN[model] || API_PRIJZEN["claude-sonnet-4-5"];
+    var kosten = ((Number(inTok)||0) * p.input + (Number(outTok)||0) * p.output) / 1000000;
+    return Math.round(kosten * 1000000) / 1000000;   // op 6 decimalen
+  }
+  // Schrijf een AI-aanroep weg naar de log. verbruik = {model, input_tokens, output_tokens}
+  async function logApiKosten(functie, verbruik){
+    try {
+      if(!verbruik) return;
+      var kosten = berekenKosten(verbruik.model, verbruik.input_tokens, verbruik.output_tokens);
+      await dbClient().from('adm_api_log').insert({
+        user_id: user.id, functie: functie, model: verbruik.model || null,
+        input_tokens: Number(verbruik.input_tokens)||0,
+        output_tokens: Number(verbruik.output_tokens)||0,
+        kosten_usd: kosten
+      });
+    } catch(e){ /* logging mag nooit de app breken */ }
+  }
+
   async function laadBoekingen(soort){
     if(!curAdmin) return [];   // geen administratie geselecteerd → niets te laden
     var r = await dbClient().from('adm_boekingen')
@@ -1261,6 +1381,7 @@
           })
         });
         var uit = await r.json();
+        if(uit.verbruik) logApiKosten("bon uitlezen ("+soort+")", uit.verbruik);
         if(uit.ok && uit.velden){
           var v = uit.velden;
           if(v.datum) document.getElementById('o-datum').value = v.datum;
@@ -1774,6 +1895,7 @@
           body: JSON.stringify({ jaar: BOEKJAAR })
         });
         var uit = await r.json();
+        if(uit.verbruik) logApiKosten("belastingregels ophalen", uit.verbruik);
         if(uit.ok || uit.ruwe_tekst){
           belastingCache[BOEKJAAR] = {
             opgehaald: new Date().toLocaleDateString('nl-NL'),
@@ -3007,6 +3129,7 @@
           body: JSON.stringify({ soort:"inkoop", media_type:mt, data:base64 })
         });
         var uit = await r.json();
+        if(uit.verbruik) logApiKosten("bon uitlezen (bedrijfsmiddel)", uit.verbruik);
         if(uit.ok && uit.velden){
           var v = uit.velden;
           if(v.bedrag_excl != null && !waardeEl.value){ waardeEl.value = v.bedrag_excl; }
