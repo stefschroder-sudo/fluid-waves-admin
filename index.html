@@ -434,6 +434,7 @@
         {id:"inkoop", icon:"file-invoice", label:"Inkoopfacturen", groep:"Uitgaven"},
         {id:"kosten", icon:"cash",         label:"Kosten",         groep:"Uitgaven"},
         {id:"middelen", icon:"inbox",    label:"Bedrijfsmiddelen", groep:"Bezittingen"},
+        {id:"leningen", icon:"businessplan", label:"Leningen & investeringen", groep:"Bezittingen"},
         {id:"loon",   icon:"users",        label:"Loonstroken",    groep:"Personeel"}
       ]
     },
@@ -1439,6 +1440,12 @@
     if(curView === "invoeren" && curItem === "middelen"){
       schermEl.innerHTML = '<div class="fw-leeg">Laden…</div>';
       await schermMiddelen();
+      return;
+    }
+
+    if(curView === "invoeren" && curItem === "leningen"){
+      schermEl.innerHTML = '<div class="fw-leeg">Laden…</div>';
+      await schermLeningen();
       return;
     }
 
@@ -3007,6 +3014,215 @@
         var r = await dbClient().from('adm_bedrijfsmiddelen').delete().eq('id', mid.id);
         if(r.error){ await fwMelding("Verwijderen mislukt: " + r.error.message); return; }
         await schermMiddelen();
+      };
+    }
+  }
+
+  // ── Leningen & investeringen ─────────────────────────────────────────────
+  async function laadBalansposten(){
+    if(!curAdmin) return [];
+    var r = await dbClient().from('adm_balansposten').select('*').eq('administratie_id', curAdmin).order('startdatum', { ascending:false });
+    if(r.error){ console.error(r.error); return []; }
+    return r.data;
+  }
+
+  // Aflossingsschema per jaar (getest): lineair, annuïteit, en uitgesteld.
+  function leningSchema(post){
+    var H = Number(post.hoofdsom)||0;
+    var r = (Number(post.rente_pct)||0)/100;
+    var n = Math.max(1, Number(post.looptijd_jaren)||1);
+    var startJaar = post.startdatum ? new Date(post.startdatum).getFullYear() : (new Date()).getFullYear();
+
+    if(post.uitgesteld){
+      var rijenU = [];
+      for(var j=0;j<n;j++){ rijenU.push({ jaar:startJaar+j, beginschuld:H, rente:0, aflossing:0, eindschuld:H }); }
+      return { rijen:rijenU, uitgesteld:true };
+    }
+    var rijen = [];
+    var schuld = H;
+    if(post.aflosvorm === 'annuiteit' && r > 0){
+      var annu = H * r / (1 - Math.pow(1+r, -n));
+      for(var a=0;a<n;a++){
+        var renteA = Math.round(schuld * r * 100)/100;
+        var aflosA = (a === n-1) ? schuld : Math.round((annu - renteA) * 100)/100;
+        var eindA = Math.round((schuld - aflosA)*100)/100;
+        rijen.push({ jaar:startJaar+a, beginschuld:Math.round(schuld*100)/100, rente:renteA, aflossing:aflosA, eindschuld:eindA });
+        schuld = eindA;
+      }
+    } else {
+      var aflosL = Math.round((H / n) * 100)/100;
+      for(var b=0;b<n;b++){
+        var renteL = Math.round(schuld * r * 100)/100;
+        var afl = (b === n-1) ? schuld : aflosL;
+        var eindL = Math.round((schuld - afl)*100)/100;
+        rijen.push({ jaar:startJaar+b, beginschuld:Math.round(schuld*100)/100, rente:renteL, aflossing:afl, eindschuld:eindL });
+        schuld = eindL;
+      }
+    }
+    return { rijen:rijen, uitgesteld:false };
+  }
+
+  // Waarden van een post voor het gekozen boekjaar (restschuld + rente dat jaar)
+  function leningInJaar(post, jaar){
+    var sch = leningSchema(post);
+    var rij = sch.rijen.filter(function(x){ return x.jaar === jaar; })[0];
+    if(rij) return { restschuld:rij.eindschuld, rente:rij.rente, actief:true, uitgesteld:sch.uitgesteld };
+    // Vóór start: volledige hoofdsom staat al klaar? Ná looptijd: afgelost (0)
+    var startJaar = post.startdatum ? new Date(post.startdatum).getFullYear() : jaar;
+    if(jaar < startJaar) return { restschuld:Number(post.hoofdsom)||0, rente:0, actief:false, uitgesteld:sch.uitgesteld };
+    return { restschuld:0, rente:0, actief:false, uitgesteld:sch.uitgesteld };
+  }
+
+  async function schermLeningen(){
+    var posten = await laadBalansposten();
+
+    var rijen = "";
+    if(!posten.length){
+      rijen = '<div style="padding:28px; text-align:center; color:var(--grijs); font-size:12.5px;">Nog geen leningen of investeringen. Voeg er een toe om de restschuld en rente per jaar bij te houden.</div>';
+    } else {
+      posten.forEach(function(p){
+        var isLening = (p.soort === 'lening');
+        var w = leningInJaar(p, BOEKJAAR);
+        var vorm = p.uitgesteld ? "uitgesteld" : (p.aflosvorm === 'annuiteit' ? "annuïteit" : "lineair");
+        rijen +=
+          '<div class="len-rij" data-id="'+p.id+'" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-top:1px solid var(--rand-licht); cursor:pointer;">'+
+            '<div style="flex:1; min-width:0;">'+
+              '<div style="font-size:12.5px; font-weight:600; color:var(--navy);">'+ontsnap(p.naam)+
+                ' <span style="font-size:10px; font-weight:700; color:'+(isLening?'var(--rood)':'var(--groen)')+'; background:'+(isLening?'#FBEDEA':'#F1F6F1')+'; border:1px solid '+(isLening?'var(--rood)':'var(--groen)')+'; border-radius:5px; padding:1px 6px; margin-left:4px;">'+(isLening?'Schuld':'Bezitting')+'</span></div>'+
+              '<div style="font-size:11px; color:var(--grijs);">'+eur(p.hoofdsom)+' · '+p.rente_pct+'% · '+p.looptijd_jaren+' jaar · '+vorm+(p.startdatum?' · vanaf '+p.startdatum:'')+'</div>'+
+            '</div>'+
+            '<div style="text-align:right;">'+
+              '<div style="font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--grijs);">Restschuld '+BOEKJAAR+'</div>'+
+              '<div style="font-size:13px; font-weight:700; color:'+(isLening?'var(--rood)':'var(--navy)')+'; font-variant-numeric:tabular-nums;">'+eur(w.restschuld)+'</div>'+
+              (w.rente>0?'<div style="font-size:10px; color:var(--grijs);">rente '+eur(w.rente)+'</div>':'')+
+            '</div>'+
+          '</div>';
+      });
+    }
+
+    schermEl.innerHTML =
+      '<div style="max-width:720px;">'+
+        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">'+
+          '<div style="font-size:12px; color:var(--grijs); max-width:70%; line-height:1.5;">Leningen (schulden) en investeringen (bezittingen) met hun restschuld per boekjaar. De restschuld komt op je balans; de rente hoort in je kosten.</div>'+
+          '<button id="len-nieuw" style="display:inline-flex; align-items:center; gap:7px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:9px 15px; cursor:pointer; flex-shrink:0;">'+
+            '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Nieuwe post</button>'+
+        '</div>'+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; overflow:hidden;">'+rijen+'</div>'+
+        '<div style="font-size:10.5px; color:var(--grijs); margin-top:12px; line-height:1.5;">De rente wordt berekend en getoond, maar niet automatisch als kostenpost geboekt — voer je rente zelf in bij Kosten als je dat wilt. Zo houd je de controle over je administratie.</div>'+
+      '</div>';
+
+    document.getElementById('len-nieuw').onclick = function(){ leningVenster(null); };
+    Array.prototype.forEach.call(schermEl.querySelectorAll('.len-rij'), function(row){
+      row.onclick = function(){
+        var p = posten.filter(function(x){ return x.id === row.getAttribute('data-id'); })[0];
+        if(p) leningVenster(p);
+      };
+    });
+  }
+
+  function leningVenster(post){
+    var nieuw = !post;
+    post = post || {};
+    var overlay = document.createElement('div');
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.45); display:flex; align-items:center; justify-content:center; z-index:2100; padding:20px;";
+    var box = document.createElement('div');
+    box.style.cssText = "width:100%; max-width:540px; max-height:92vh; overflow:auto; background:var(--papier); border:1px solid #D8D2C4; border-radius:14px; box-shadow:0 10px 40px rgba(27,44,79,.25);";
+    function inp(id, val, ph, type){ return '<input id="'+id+'" type="'+(type||"text")+'" value="'+(val==null?"":String(val)).replace(/"/g,"&quot;")+'" placeholder="'+(ph||"")+'" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit);">'; }
+    function lbl(t){ return '<label style="display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin-bottom:3px; margin-top:11px;">'+t+'</label>'; }
+    function opt(v,l,sel){ return '<option value="'+v+'"'+(sel?' selected':'')+'>'+l+'</option>'; }
+    box.innerHTML =
+      '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; font-size:13px; font-weight:700; color:#FFFFFF; position:sticky; top:0;">'+(nieuw?"Nieuwe lening of investering":"Post bewerken")+'</div>'+
+      '<div style="padding:18px;">'+
+        lbl("Naam")+ inp("len-naam", post.naam, "bijv. Zakelijke lening ABN")+
+        '<div style="display:flex; gap:10px;">'+
+          '<div style="flex:1;">'+lbl("Soort")+'<select id="len-soort" style="width:100%; padding:9px 10px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit);">'+opt("lening","Lening (schuld)", post.soort!=='investering')+opt("investering","Investering (bezitting)", post.soort==='investering')+'</select></div>'+
+          '<div style="flex:1;">'+lbl("Aflosvorm")+'<select id="len-vorm" style="width:100%; padding:9px 10px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit);">'+opt("lineair","Lineair", post.aflosvorm!=='annuiteit')+opt("annuiteit","Annuïteit", post.aflosvorm==='annuiteit')+'</select></div>'+
+        '</div>'+
+        '<div style="display:flex; gap:10px;">'+
+          '<div style="flex:1;">'+lbl("Hoofdsom")+inp("len-hoofdsom", post.hoofdsom, "10000", "number")+'</div>'+
+          '<div style="width:110px;">'+lbl("Rente %")+inp("len-rente", post.rente_pct!=null?post.rente_pct:0, "5", "number")+'</div>'+
+        '</div>'+
+        '<div style="display:flex; gap:10px;">'+
+          '<div style="flex:1;">'+lbl("Looptijd (jaren)")+inp("len-looptijd", post.looptijd_jaren!=null?post.looptijd_jaren:5, "5", "number")+'</div>'+
+          '<div style="width:160px;">'+lbl("Startdatum")+inp("len-start", post.startdatum, "", "date")+'</div>'+
+        '</div>'+
+        '<label style="display:flex; align-items:center; gap:8px; margin-top:14px; cursor:pointer; font-size:12px; color:var(--navy);">'+
+          '<input id="len-uitgesteld" type="checkbox"'+(post.uitgesteld?' checked':'')+' style="width:16px; height:16px;"> Uitgesteld — nog geen rente en aflossing (de schuld blijft op de hoofdsom staan)'+
+        '</label>'+
+        '<div id="len-schema" style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:8px; padding:12px; margin-top:14px; font-size:11px; max-height:200px; overflow:auto;"></div>'+
+        '<div style="display:flex; gap:8px; align-items:center; margin-top:16px;">'+
+          '<button id="len-opslaan" style="padding:9px 16px; background:var(--navy); border:1px solid var(--navy); color:var(--papier); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Opslaan</button>'+
+          '<button id="len-annuleer" style="padding:9px 16px; background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; cursor:pointer;">Annuleren</button>'+
+          (nieuw?'':'<button id="len-verwijder" style="margin-left:auto; padding:9px 16px; background:transparent; border:1px solid var(--rood); color:var(--rood); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">Afboeken</button>')+
+        '</div>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function sluit(){ if(overlay.parentNode) document.body.removeChild(overlay); }
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) sluit(); });
+    document.getElementById('len-annuleer').onclick = sluit;
+
+    function huidigePost(){
+      return {
+        hoofdsom: parseFloat(document.getElementById('len-hoofdsom').value)||0,
+        rente_pct: parseFloat(document.getElementById('len-rente').value)||0,
+        looptijd_jaren: parseInt(document.getElementById('len-looptijd').value,10)||1,
+        startdatum: document.getElementById('len-start').value||null,
+        aflosvorm: document.getElementById('len-vorm').value,
+        uitgesteld: document.getElementById('len-uitgesteld').checked
+      };
+    }
+    function werkSchemaBij(){
+      var sch = leningSchema(huidigePost());
+      var html = '<div style="display:flex; font-size:9px; text-transform:uppercase; letter-spacing:.04em; color:var(--grijs); padding-bottom:4px; border-bottom:1px solid var(--rand-licht);">'+
+        '<span style="width:44px;">Jaar</span><span style="flex:1; text-align:right;">Beginschuld</span><span style="flex:1; text-align:right;">Rente</span><span style="flex:1; text-align:right;">Aflossing</span><span style="flex:1; text-align:right;">Eindschuld</span></div>';
+      sch.rijen.forEach(function(r){
+        html += '<div style="display:flex; font-size:11px; padding:3px 0; '+(r.jaar===BOEKJAAR?'background:#FBF6E6; font-weight:600;':'')+'">'+
+          '<span style="width:44px; color:var(--grijs);">'+r.jaar+'</span>'+
+          '<span style="flex:1; text-align:right; font-variant-numeric:tabular-nums;">'+eur(r.beginschuld)+'</span>'+
+          '<span style="flex:1; text-align:right; font-variant-numeric:tabular-nums; color:var(--grijs);">'+eur(r.rente)+'</span>'+
+          '<span style="flex:1; text-align:right; font-variant-numeric:tabular-nums;">'+eur(r.aflossing)+'</span>'+
+          '<span style="flex:1; text-align:right; font-variant-numeric:tabular-nums; font-weight:600;">'+eur(r.eindschuld)+'</span></div>';
+      });
+      if(sch.uitgesteld){ html += '<div style="font-size:10px; color:var(--grijs); margin-top:6px;">Uitgesteld: de schuld blijft op de hoofdsom staan. Zet uitstel af zodra aflossing en rente beginnen.</div>'; }
+      document.getElementById('len-schema').innerHTML = html;
+    }
+    ['len-hoofdsom','len-rente','len-looptijd','len-start','len-vorm','len-uitgesteld'].forEach(function(id){
+      var el = document.getElementById(id);
+      el.oninput = werkSchemaBij; el.onchange = werkSchemaBij;
+    });
+    werkSchemaBij();
+
+    document.getElementById('len-opslaan').onclick = async function(){
+      var naam = document.getElementById('len-naam').value.trim();
+      if(!naam){ await fwMelding("Geef de post een naam."); return; }
+      this.textContent = "Bezig…"; this.disabled = true;
+      var p = huidigePost();
+      var rec = {
+        naam:naam, soort:document.getElementById('len-soort').value,
+        hoofdsom:p.hoofdsom, rente_pct:p.rente_pct, looptijd_jaren:p.looptijd_jaren,
+        startdatum:p.startdatum, aflosvorm:p.aflosvorm, uitgesteld:p.uitgesteld
+      };
+      var r;
+      if(nieuw){
+        rec.user_id = user.id; rec.administratie_id = curAdmin;
+        r = await dbClient().from('adm_balansposten').insert(rec);
+      } else {
+        r = await dbClient().from('adm_balansposten').update(rec).eq('id', post.id);
+      }
+      if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
+      sluit();
+      await schermLeningen();
+    };
+
+    if(!nieuw){
+      document.getElementById('len-verwijder').onclick = async function(){
+        sluit();
+        var ok = await fwBevestig("Post \""+post.naam+"\" volledig afboeken en verwijderen?\n\nGebruik dit als de lening is afgelost of de investering is beëindigd.", { okLabel:"Afboeken", annuleerLabel:"Annuleren" });
+        if(!ok) return;
+        var r = await dbClient().from('adm_balansposten').delete().eq('id', post.id);
+        if(r.error){ await fwMelding("Afboeken mislukt: " + r.error.message); return; }
+        await schermLeningen();
       };
     }
   }
