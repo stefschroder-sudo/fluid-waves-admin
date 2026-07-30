@@ -80,7 +80,7 @@ export default async function handler(req, res) {
       } catch (e) { /* logo overslaan bij fout */ }
     }
     text(bedrijf.naam || "", M + logoBreedte, height - 46, { size: 18, bold: true, color: WIT });
-    text("FACTUUR", M + logoBreedte, height - 68, { size: 11, color: GOUD });
+    text((b.soort === "offerte" ? "OFFERTE" : "FACTUUR"), M + logoBreedte, height - 68, { size: 11, color: GOUD });
 
     var bx = width - M;
     var ry = height - 34;
@@ -100,9 +100,10 @@ export default async function handler(req, res) {
       if (r && r.trim()) { text(r, M, ky, { size: 9.5 }); ky -= 13; }
     });
 
-    textR("Factuurnummer", width - M - 90, y, { size: 8.5, color: GRIJS });
-    textR(b.factuurnummer || "concept", width - M, y, { size: 9.5, bold: true });
-    textR("Factuurdatum", width - M - 90, y - 15, { size: 8.5, color: GRIJS });
+    var isOfferte = (b.soort === "offerte");
+    textR(isOfferte ? "Offertenummer" : "Factuurnummer", width - M - 90, y, { size: 8.5, color: GRIJS });
+    textR(b.factuurnummer || (isOfferte ? "concept" : "concept"), width - M, y, { size: 9.5, bold: true });
+    textR(isOfferte ? "Offertedatum" : "Factuurdatum", width - M - 90, y - 15, { size: 8.5, color: GRIJS });
     textR(b.factuurdatum || "", width - M, y - 15, { size: 9.5 });
 
     y -= 75;
@@ -148,15 +149,21 @@ export default async function handler(req, res) {
     Object.keys(tt.perTarief).sort(function (a, c2) { return c2 - a; }).forEach(function (p) {
       text("Btw " + p + "%", lx, y, { size: 9.5, color: GRIJS }); textR(eur(tt.perTarief[p].btw), tx, y, { size: 9.5 }); y -= 16;
     });
+    y -= 10;   // extra lucht vóór de totaalbalk
     page.drawRectangle({ x: lx - 10, y: y - 6, width: (tx - lx) + 16, height: 22, color: NAVY });
     text("Totaal", lx, y, { size: 11, bold: true, color: WIT }); textR(eur(tt.incl), tx, y, { size: 11, bold: true, color: WIT });
     y -= 45;
 
     page.drawLine({ start: { x: M, y: y }, end: { x: width - M, y: y }, thickness: 0.5, color: LIJN }); y -= 16;
-    if (bedrijf.iban) {
-      text("Gelieve het bedrag van " + eur(tt.incl) + " over te maken op " + bedrijf.iban + (b.factuurnummer ? " o.v.v. " + b.factuurnummer : "") + ".", M, y, { size: 9 }); y -= 13;
+    if (isOfferte) {
+      text("Dit is een offerte, geen factuur. Na akkoord ontvangt u de definitieve factuur.", M, y, { size: 9 }); y -= 13;
+      if (b.geldigheid) { text(b.geldigheid, M, y, { size: 9, color: GRIJS }); }
+    } else {
+      if (bedrijf.iban) {
+        text("Gelieve het bedrag van " + eur(tt.incl) + " over te maken op " + bedrijf.iban + (b.factuurnummer ? " o.v.v. " + b.factuurnummer : "") + ".", M, y, { size: 9 }); y -= 13;
+      }
+      text("Betaaltermijn 14 dagen.", M, y, { size: 9, color: GRIJS });
     }
-    text("Betaaltermijn 14 dagen.", M, y, { size: 9, color: GRIJS });
 
     var bytes2 = await pdf.save();
     var naam = (b.bestandsnaam || "factuur").replace(/[^a-zA-Z0-9 ()_-]/g, "") + ".pdf";
