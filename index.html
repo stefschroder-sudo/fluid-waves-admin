@@ -3578,8 +3578,8 @@
       .filter(function(r){ return !r.betaald && inJaar(r.datum); })
       .reduce(function(s,r){ return s+(Number(r.bedrag_incl)||0); }, 0);
 
-    // Btw-schuld: openstaand jaartotaal
-    var btwSchuld = 0;
+    // Btw-saldo openstaand jaartotaal: positief = af te dragen (schuld), negatief = terug te ontvangen (vordering)
+    var btwSaldo = 0;
     try {
       var statusMap = await laadBtwStatus();
       var type = ritmeVan();
@@ -3587,20 +3587,21 @@
       for(var p=1; p<=na; p++){
         var st = statusMap[BOEKJAAR+"-"+type+"-"+p];
         if(st && st.status === "betaald") continue;
-        btwSchuld += await btwVanPeriode(BOEKJAAR, type, p);
+        btwSaldo += await btwVanPeriode(BOEKJAAR, type, p);
       }
-    } catch(e){ btwSchuld = 0; }
-    if(btwSchuld < 0) btwSchuld = 0;   // negatief = te ontvangen; dan geen schuld
+    } catch(e){ btwSaldo = 0; }
+    var btwSchuld = btwSaldo > 0 ? btwSaldo : 0;        // af te dragen → passiva
+    var btwVordering = btwSaldo < 0 ? -btwSaldo : 0;    // terug te ontvangen → activa
 
     var round = function(n){ return Math.round((Number(n)||0)*100)/100; };
-    var activa = round(bedrijfsmiddelen + investeringen + debiteuren + banksaldo);
+    var activa = round(bedrijfsmiddelen + investeringen + debiteuren + btwVordering + banksaldo);
     var schuldenExclEV = round(leningen + crediteuren + btwSchuld);
     var passivaMetEV = eigenVermogen != null ? round(schuldenExclEV + eigenVermogen) : null;
     var verschil = eigenVermogen != null ? round(activa - passivaMetEV) : round(activa - schuldenExclEV);
 
     return {
       bedrijfsmiddelen:round(bedrijfsmiddelen), investeringen:round(investeringen),
-      debiteuren:round(debiteuren), banksaldo:round(banksaldo), activa:activa,
+      debiteuren:round(debiteuren), btwVordering:round(btwVordering), banksaldo:round(banksaldo), activa:activa,
       banksaldoDatum:banksaldoDatum, banksaldoBron:banksaldoBron,
       leningen:round(leningen), crediteuren:round(crediteuren), btwSchuld:round(btwSchuld),
       eigenVermogen:eigenVermogen, schuldenExclEV:schuldenExclEV, passivaMetEV:passivaMetEV,
@@ -3735,6 +3736,7 @@
             regel("Bedrijfsmiddelen (boekwaarde)", c.bedrijfsmiddelen, {lijn:true})+
             (c.investeringen>0?regel("Investeringen", c.investeringen, {lijn:true}):"")+
             regel("Debiteuren (openstaande facturen)", c.debiteuren, {lijn:true})+
+            (c.btwVordering>0?regel("Nog te ontvangen btw", c.btwVordering, {lijn:true}):"")+
             regel("Bank en kas"+(c.banksaldoBron==="actueel"&&c.banksaldoDatum?' <span style="font-size:9px; color:var(--grijs); font-weight:400;">(stand '+c.banksaldoDatum+')</span>':(c.banksaldoBron==="beginstand"?' <span style="font-size:9px; color:var(--grijs); font-weight:400;">(beginstand — vul actueel saldo in op Dashboard)</span>':'')), c.banksaldo, {lijn:true})+
             regel("Totaal bezittingen", c.activa, {dubbel:true, vet:true, groot:true})+
           '</div>'+
@@ -3744,7 +3746,7 @@
             regel("Eigen vermogen", (c.eigenVermogen!=null?c.eigenVermogen:c.implicietEV), {lijn:true, kleur:(evOnbekend?"var(--grijs)":"var(--inkt)")})+
             (c.leningen>0?regel("Leningen", c.leningen, {lijn:true}):"")+
             regel("Crediteuren (nog te betalen)", c.crediteuren, {lijn:true})+
-            regel("Btw-schuld", c.btwSchuld, {lijn:true})+
+            (c.btwSchuld>0?regel("Btw-schuld", c.btwSchuld, {lijn:true}):"")+
             regel("Totaal passiva", (c.passivaMetEV!=null?c.passivaMetEV:c.activa), {dubbel:true, vet:true, groot:true})+
           '</div>'+
         '</div>'+
