@@ -476,8 +476,9 @@
     facturen: {
       titel:"Facturen", actie:null,
       items:[
-        {id:"nieuw",     icon:"file-plus",  label:"Nieuwe factuur",   groep:"Factureren"},
-        {id:"overzicht", icon:"files",      label:"Mijn facturen",    groep:"Factureren"},
+        {id:"nieuw",     icon:"file-plus",  label:"Nieuwe offerte",   groep:"Opstellen"},
+        {id:"offertes",  icon:"file-text",  label:"Mijn offertes",    groep:"Opstellen"},
+        {id:"overzicht", icon:"files",      label:"Mijn facturen",    groep:"Opstellen"},
         {id:"klanten",   icon:"users",      label:"Klanten",          groep:"Beheer"},
         {id:"bedrijf",   icon:"building",   label:"Mijn bedrijfsgegevens", groep:"Beheer"}
       ]
@@ -1433,7 +1434,8 @@
       if(curItem === "bedrijf"){ await schermBedrijf(); }
       else if(curItem === "klanten"){ await schermKlanten(); }
       else if(curItem === "nieuw"){ await schermNieuweFactuur(); }
-      else if(curItem === "overzicht"){ await schermFacturenOverzicht(); }
+      else if(curItem === "offertes"){ await schermFacturenOverzicht('offerte'); }
+      else if(curItem === "overzicht"){ await schermFacturenOverzicht('factuur'); }
       else { await schermFacturenPlaceholder(); }
       toonFactuurUitleg();
       return;
@@ -1795,9 +1797,9 @@
     var banner = document.createElement('div');
     banner.style.cssText = "position:relative; max-width:760px; background:#FBF6E6; border:1px solid var(--goud); border-radius:10px; padding:13px 40px 13px 16px; margin-bottom:16px; font-size:11.5px; color:var(--navy); line-height:1.5;";
     banner.innerHTML =
-      '<b>Facturen maken.</b> Stel hier je bedrijfsgegevens en klanten in, en maak een factuur op met werkuren, reiskosten en overige declaraties. '+
-      'Je slaat een factuur eerst op als concept en kunt hem rustig aanpassen. Zodra je hem definitief maakt en akkoord geeft, wordt hij '+
-      '<b>direct als omzet in je administratie opgenomen</b> en krijgt hij zijn factuurnummer.'+
+      '<b>Offertes en facturen.</b> Stel hier je bedrijfsgegevens en klanten in, en maak een offerte op met werkuren, reiskosten en overige declaraties. '+
+      'Je stuurt de offerte naar je klant en kunt hem rustig aanpassen. Zodra de klant akkoord geeft, zet je de offerte om naar een factuur: die wordt dan '+
+      '<b>direct als omzet in je administratie opgenomen</b> en krijgt zijn factuurnummer.'+
       '<button id="fu-sluit" title="Sluiten" style="position:absolute; top:8px; right:8px; background:none; border:none; color:var(--goud); cursor:pointer; padding:4px; display:flex;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>';
     schermEl.insertBefore(banner, schermEl.firstChild);
     document.getElementById('fu-sluit').onclick = function(){ factuurUitlegWeg = true; banner.remove(); };
@@ -2189,12 +2191,12 @@
         '</div>'+
 
         '<div style="display:flex; gap:10px; align-items:center;">'+
-          '<button id="f-opslaan" style="background:transparent; color:var(--navy); border:1px solid var(--navy); border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 20px; cursor:pointer;">Concept opslaan</button>'+
-          '<button id="f-voorbeeld" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 20px; cursor:pointer;">Voorbeeld &amp; definitief maken</button>'+
+          '<button id="f-opslaan" style="background:transparent; color:var(--navy); border:1px solid var(--navy); border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 20px; cursor:pointer;">Offerte opslaan</button>'+
+          '<button id="f-voorbeeld" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:11px 20px; cursor:pointer;">Voorbeeld &amp; versturen</button>'+
           '<button id="f-leeg" style="background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; padding:11px 16px; cursor:pointer;">Leegmaken</button>'+
           '<span id="f-status" style="font-size:11.5px; color:var(--groen);"></span>'+
         '</div>'+
-        '<div style="font-size:10.5px; color:var(--grijs); margin-top:10px; line-height:1.5;">Het concept wordt opgeslagen; het krijgt pas een factuurnummer en telt pas mee in je omzet wanneer je het later definitief maakt. Voorbeeld en versturen bouwen we in de volgende stap.</div>'+
+        '<div style="font-size:10.5px; color:var(--grijs); margin-top:10px; line-height:1.5;">De offerte wordt opgeslagen en telt nog niet mee in je omzet. Via \u201cVoorbeeld &amp; versturen\u201d bekijk je hem, verstuur je hem naar de klant, en zet je hem na akkoord om naar een definitieve factuur — dan krijgt hij zijn factuurnummer en wordt de omzet geboekt.</div>'+
       '</div>';
 
     // Velden die het concept bijwerken
@@ -2301,9 +2303,9 @@
       if(!echteRegels.length){ await fwMelding("Voeg minstens één regel met inhoud toe."); return; }
       this.textContent = "Bezig…"; this.disabled = true;
       var fout = await bewaarConcept(c, echteRegels);
-      this.textContent = "Concept opslaan"; this.disabled = false;
+      this.textContent = "Offerte opslaan"; this.disabled = false;
       if(fout){ await fwMelding("Opslaan mislukt: " + fout); return; }
-      document.getElementById('f-status').textContent = "Concept opgeslagen ✓";
+      document.getElementById('f-status').textContent = "Offerte opgeslagen ✓";
       setTimeout(function(){ var el=document.getElementById('f-status'); if(el) el.textContent=""; }, 2500);
     };
 
@@ -2343,6 +2345,7 @@
     return {
       bedrijf:{ naam:a.naam, adres:a.adres, postcode:a.postcode, plaats:a.plaats, email:a.email, telefoon:a.telefoon, iban:a.iban, kvk:a.kvk, btw:a.btw_nummer },
       klant: klant ? { naam:klant.naam, adres:klant.adres, postcode:klant.postcode, plaats:klant.plaats, email:klant.email } : {},
+      soort: (c.status === 'definitief' ? 'factuur' : 'offerte'),
       factuurnummer: c.factuurnummer || null,
       factuurdatum: c.factuurdatum,
       omschrijving: c.omschrijving,
@@ -2367,16 +2370,17 @@
     var isDefinitief = (c.status === 'definitief');
     box.innerHTML =
       '<div style="background:var(--navy); border-bottom:2px solid var(--goud); padding:12px 18px; display:flex; align-items:center; justify-content:space-between;">'+
-        '<span style="font-size:13px; font-weight:700; color:#fff;">Factuurvoorbeeld</span>'+
+        '<span style="font-size:13px; font-weight:700; color:#fff;">'+(isDefinitief?'Factuur':'Offerte')+'voorbeeld</span>'+
         '<button id="fv-sluit" style="background:none; border:none; color:#fff; cursor:pointer; font-size:18px; padding:0 4px;">&times;</button>'+
       '</div>'+
       '<div id="fv-body" style="flex:1; overflow:auto; background:#525659; display:flex; align-items:center; justify-content:center;"><div style="color:#fff; font-size:12px; padding:40px;">Voorbeeld laden…</div></div>'+
-      '<div style="padding:12px 18px; background:var(--papier); border-top:1px solid var(--rand); display:flex; gap:10px; align-items:center;">'+
+      '<div style="padding:12px 18px; background:var(--papier); border-top:1px solid var(--rand); display:flex; gap:10px; align-items:center; flex-wrap:wrap;">'+
         (isDefinitief
-          ? '<span style="font-size:12px; color:var(--groen); font-weight:600;">Deze factuur is definitief (nr. '+ontsnap(c.factuurnummer||"")+') en als omzet geboekt.</span>'
-          : '<button id="fv-definitief" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 18px; cursor:pointer;">Akkoord — definitief maken</button>'
+          ? '<span style="font-size:12px; color:var(--groen); font-weight:600;">Factuur '+ontsnap(c.factuurnummer||"")+' · als omzet geboekt.</span>'
+          : '<button id="fv-definitief" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 18px; cursor:pointer;">Akkoord — omzetten naar factuur</button>'
           )+
-        '<button id="fv-download" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 16px; cursor:pointer;">PDF downloaden</button>'+
+        '<button id="fv-verstuur" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 16px; cursor:pointer;">Versturen</button>'+
+        '<button id="fv-download" style="background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 16px; cursor:pointer;">PDF downloaden</button>'+
         '<span id="fv-status" style="font-size:11.5px; color:var(--grijs); flex:1;"></span>'+
       '</div>';
     overlay.appendChild(box);
@@ -2398,19 +2402,43 @@
     document.getElementById('fv-download').onclick = function(){
       if(!pdfBlob) return;
       var a = document.createElement('a'); a.href = URL.createObjectURL(pdfBlob);
-      a.download = "factuur_"+(c.factuurnummer||"concept")+".pdf"; document.body.appendChild(a); a.click(); a.remove();
+      a.download = (c.status==='definitief'?"factuur_":"offerte_")+(c.factuurnummer||"concept")+".pdf"; document.body.appendChild(a); a.click(); a.remove();
+    };
+
+    // Versturen: e-mail of WhatsApp openen met de klant erin (PDF zelf downloadt de gebruiker mee)
+    document.getElementById('fv-verstuur').onclick = async function(){
+      var klant = null;
+      if(c.klant_id){ var k = await dbClient().from('adm_klanten').select('*').eq('id', c.klant_id).single(); if(!k.error) klant = k.data; }
+      var stuk = (c.status==='definitief') ? "factuur" : "offerte";
+      var kanaal = await fwKeuze(
+        "Hoe wil je deze "+stuk+" versturen? Download eerst de PDF, daarna opent het gekozen kanaal met de klant erin — je voegt de PDF daar zelf toe.",
+        "Versturen",
+        [ {label:"Via e-mail", waarde:"mail"}, {label:"Via WhatsApp", waarde:"wa"} ]
+      );
+      if(!kanaal) return;
+      // PDF downloaden zodat de gebruiker hem kan bijvoegen
+      if(pdfBlob){ var a=document.createElement('a'); a.href=URL.createObjectURL(pdfBlob); a.download=(stuk)+"_"+(c.factuurnummer||"concept")+".pdf"; document.body.appendChild(a); a.click(); a.remove(); }
+      var a2 = admins[curAdmin] || {};
+      var onderwerp = (stuk==="factuur"?"Factuur":"Offerte")+(c.factuurnummer?" "+c.factuurnummer:"")+" — "+(a2.naam||"");
+      var body = "Beste"+(klant&&klant.naam?" "+klant.naam:"")+",\n\nIn de bijlage vindt u "+(stuk==="factuur"?"de factuur":"onze offerte")+".\n\nMet vriendelijke groet,\n"+(a2.naam||"");
+      if(kanaal === "mail"){
+        var mailto = "mailto:"+encodeURIComponent(klant&&klant.email?klant.email:"")+"?subject="+encodeURIComponent(onderwerp)+"&body="+encodeURIComponent(body);
+        window.location.href = mailto;
+      } else {
+        window.open("https://wa.me/?text="+encodeURIComponent(onderwerp+"\n\n"+body), "_blank");
+      }
     };
 
     var defBtn = document.getElementById('fv-definitief');
     if(defBtn){
       defBtn.onclick = async function(){
-        var ok = await fwBevestig("Deze factuur definitief maken?\n\nDe factuur krijgt een definitief factuurnummer en wordt direct als omzet in je administratie geboekt. Dit kan niet worden teruggedraaid.", { okLabel:"Definitief maken", annuleerLabel:"Annuleren" });
+        var ok = await fwBevestig("Deze offerte omzetten naar een definitieve factuur?\n\nDe factuur krijgt een factuurnummer en wordt direct als omzet in je administratie geboekt. Dit kan niet worden teruggedraaid.", { okLabel:"Omzetten naar factuur", annuleerLabel:"Annuleren" });
         if(!ok) return;
         defBtn.textContent = "Bezig…"; defBtn.disabled = true;
         var fout = await maakDefinitief(c);
-        if(fout){ await fwMelding("Definitief maken mislukt: " + fout); defBtn.textContent="Akkoord — definitief maken"; defBtn.disabled=false; return; }
+        if(fout){ await fwMelding("Omzetten mislukt: " + fout); defBtn.textContent="Akkoord — omzetten naar factuur"; defBtn.disabled=false; return; }
         sluit();
-        await fwMelding("Factuur "+c.factuurnummer+" is definitief gemaakt en als omzet geboekt.");
+        await fwMelding("Offerte omgezet naar factuur "+c.factuurnummer+" en als omzet geboekt.");
         factuurConcept = null;
         curItem = "overzicht"; renderNav(); await renderScherm();
       };
@@ -2532,19 +2560,23 @@
     return r.data;
   }
 
-  async function schermFacturenOverzicht(){
+  async function schermFacturenOverzicht(type){
+    type = type || 'factuur';
+    var isOff = (type === 'offerte');
     var facturen = await laadFacturen();
     var klanten = await laadKlanten();
     var klantNaam = {};
     klanten.forEach(function(k){ klantNaam[k.id] = k.naam; });
 
+    // Offertes = nog niet definitief; Facturen = definitief
+    var lijst = facturen.filter(function(f){ return isOff ? (f.status !== 'definitief') : (f.status === 'definitief'); });
+
     function rij(f){
       var naam = f.klant_id && klantNaam[f.klant_id] ? klantNaam[f.klant_id] : "— geen klant —";
-      var isConcept = (f.status !== 'definitief');
-      var badge = isConcept
-        ? '<span style="font-size:10px; font-weight:700; color:var(--goud); background:#FBF6E6; border:1px solid var(--goud); border-radius:5px; padding:2px 7px;">Concept</span>'
-        : '<span style="font-size:10px; font-weight:700; color:var(--groen); background:#F1F6F1; border:1px solid var(--groen); border-radius:5px; padding:2px 7px;">Definitief</span>';
-      return '<div class="fac-rij" data-id="'+f.id+'" data-concept="'+(isConcept?"1":"0")+'" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-top:1px solid var(--rand-licht); cursor:'+(isConcept?'pointer':'default')+';">'+
+      var badge = isOff
+        ? '<span style="font-size:10px; font-weight:700; color:var(--goud); background:#FBF6E6; border:1px solid var(--goud); border-radius:5px; padding:2px 7px;">Offerte</span>'
+        : '<span style="font-size:10px; font-weight:700; color:var(--groen); background:#F1F6F1; border:1px solid var(--groen); border-radius:5px; padding:2px 7px;">Factuur</span>';
+      return '<div class="fac-rij" data-id="'+f.id+'" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-top:1px solid var(--rand-licht); cursor:pointer;">'+
         '<div style="flex:1; min-width:0;">'+
           '<div style="font-size:12.5px; font-weight:600; color:var(--navy);">'+ontsnap(naam)+(f.factuurnummer?' <span style="color:var(--grijs); font-weight:400;">· '+ontsnap(f.factuurnummer)+'</span>':'')+'</div>'+
           '<div style="font-size:11px; color:var(--grijs);">'+(f.factuurdatum||"geen datum")+(f.omschrijving?' · '+ontsnap(f.omschrijving.slice(0,50)):'')+'</div>'+
@@ -2554,33 +2586,29 @@
       '</div>';
     }
 
-    var concepten = facturen.filter(function(f){ return f.status !== 'definitief'; });
-    var definitief = facturen.filter(function(f){ return f.status === 'definitief'; });
-
     var html = '<div style="max-width:720px;">';
-    if(!facturen.length){
-      html += '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:28px; text-align:center; color:var(--grijs); font-size:12.5px;">Nog geen facturen. Maak er een aan bij \u201cNieuwe factuur\u201d.</div>';
+    if(!lijst.length){
+      html += '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:28px; text-align:center; color:var(--grijs); font-size:12.5px;">'+
+        (isOff ? 'Nog geen offertes. Maak er een aan bij \u201cNieuwe offerte\u201d.' : 'Nog geen facturen. Een offerte wordt een factuur zodra je hem akkoord geeft.')+'</div>';
     } else {
-      if(concepten.length){
-        html += '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--goud); font-weight:700; margin-bottom:6px;">Concepten</div>'+
-          '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; overflow:hidden; margin-bottom:18px;">'+concepten.map(rij).join("")+'</div>';
-      }
-      if(definitief.length){
-        html += '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--groen); font-weight:700; margin-bottom:6px;">Definitieve facturen</div>'+
-          '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; overflow:hidden;">'+definitief.map(rij).join("")+'</div>';
-      }
-      html += '<div style="font-size:10.5px; color:var(--grijs); margin-top:12px; line-height:1.5;">Klik een concept aan om het te openen en verder te werken of definitief te maken. Definitieve facturen zijn vastgelegd en al als omzet geboekt.</div>';
+      html += '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; overflow:hidden;">'+lijst.map(rij).join("")+'</div>';
+      html += '<div style="font-size:10.5px; color:var(--grijs); margin-top:12px; line-height:1.5;">'+
+        (isOff
+          ? 'Klik een offerte aan om te openen, te versturen of om te zetten naar een factuur. Een offerte telt nog niet mee in je omzet.'
+          : 'Klik een factuur aan om te bekijken of opnieuw te versturen. Facturen zijn vastgelegd en als omzet geboekt.')+'</div>';
     }
     html += '</div>';
     schermEl.innerHTML = html;
 
     Array.prototype.forEach.call(schermEl.querySelectorAll('.fac-rij'), function(row){
-      if(row.getAttribute('data-concept') !== "1") return;
       row.onclick = async function(){
         await laadFactuurInConcept(row.getAttribute('data-id'));
-        curItem = "nieuw";
-        renderNav();
-        await renderScherm();
+        if(isOff){
+          curItem = "nieuw"; renderNav(); await renderScherm();
+        } else {
+          // Definitieve factuur: direct het voorbeeld openen (bekijken/opnieuw versturen)
+          await toonFactuurVoorbeeld(factuurConcept);
+        }
       };
     });
   }
