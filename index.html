@@ -364,6 +364,65 @@
     toonGebruiker();
     await laadAdmins();
     applyAdmin(); renderNav(); await renderScherm();
+    var a = admins[curAdmin];
+    if(!a || !a.welkom_verbergen){ toonWelkom(); }
+  }
+
+  function toonWelkom(){
+    if(document.getElementById('fw-welkom')) return;
+    var overlay = document.createElement('div');
+    overlay.id = "fw-welkom";
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.55); display:flex; align-items:center; justify-content:center; z-index:2600; padding:20px;";
+    var box = document.createElement('div');
+    box.style.cssText = "width:100%; max-width:560px; max-height:92vh; overflow:auto; background:var(--papier); border-radius:16px; box-shadow:0 14px 50px rgba(27,44,79,.32); position:relative;";
+    function blok(kleur, titel, items){
+      return '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-left:3px solid '+kleur+'; border-radius:10px; padding:14px 16px; margin-bottom:12px;">'+
+        '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:9px;">'+titel+'</div>'+
+        items.map(function(t){ return '<div style="display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--inkt); line-height:1.45; margin-bottom:6px;"><span style="color:'+kleur+'; font-weight:700; flex-shrink:0;">–</span><span>'+t+'</span></div>'; }).join("")+
+      '</div>';
+    }
+    box.innerHTML =
+      '<button id="fw-welkom-x" title="Sluiten" style="position:absolute; top:12px; right:14px; background:none; border:none; color:var(--papier); font-size:22px; line-height:1; cursor:pointer; z-index:2;">&times;</button>'+
+      '<div style="background:var(--navy); border-bottom:2px solid var(--goud); border-radius:16px 16px 0 0; padding:22px 24px;">'+
+        '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.14em; color:var(--goud); font-weight:700; margin-bottom:6px;">Welkom</div>'+
+        '<div style="font-size:21px; font-weight:800; color:#FFFFFF; line-height:1.2;">Administratie tool voor iedereen!</div>'+
+        '<div style="font-size:12.5px; color:rgba(255,255,255,.82); margin-top:8px; line-height:1.5;">Voer je basisadministratie, kosten, werkuren, facturen en btw op een makkelijke en overzichtelijke manier zelf. De rest staat automatisch klaar voor je accountant.</div>'+
+      '</div>'+
+      '<div style="padding:20px 24px;">'+
+        blok("#1B2C4F", "Dit doe je zelf — makkelijk en overzichtelijk", [
+          "Je <b>basisadministratie</b>: omzet, inkoop en kosten bijhouden, met bonherkenning door AI.",
+          "Je <b>kosten- en werkurenbeheer</b> netjes op één plek.",
+          "<b>Facturen en offertes</b> maken, versturen en als betaald afvinken.",
+          "Je <b>btw-aangifte</b> voorbereiden en klaarzetten om in te dienen."
+        ])+
+        blok("#6B7A8F", "Dit staat automatisch klaar voor je accountant", [
+          "Een <b>winst- en verliesrekening</b> uit je eigen cijfers.",
+          "Een <b>voorbereiding voor de balans</b>, met een signaal of hij sluit.",
+          "Een <b>voorbereiding voor de IB-aangifte</b>.",
+          "Alles <b>makkelijk te delen</b> met je accountant of boekhouder voor de finalisering van de jaarafsluiting."
+        ])+
+        '<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:6px; flex-wrap:wrap;">'+
+          '<label style="display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--grijs); cursor:pointer;">'+
+            '<input id="fw-welkom-verberg" type="checkbox" style="width:15px; height:15px;"> Niet meer tonen bij opstarten</label>'+
+          '<button id="fw-welkom-start" style="background:var(--navy); color:var(--papier); border:none; border-radius:9px; font-size:13px; font-weight:700; padding:11px 24px; cursor:pointer;">Aan de slag</button>'+
+        '</div>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    async function sluit(){
+      var verberg = document.getElementById('fw-welkom-verberg').checked;
+      if(verberg && curAdmin){
+        try {
+          await dbClient().from('adm_administraties').update({ welkom_verbergen:true }).eq('id', curAdmin);
+          if(admins[curAdmin]) admins[curAdmin].welkom_verbergen = true;
+        } catch(e){}
+      }
+      if(overlay.parentNode) document.body.removeChild(overlay);
+    }
+    document.getElementById('fw-welkom-x').onclick = sluit;
+    document.getElementById('fw-welkom-start').onclick = sluit;
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) sluit(); });
   }
 
   // De ingelogde gebruiker tonen rechtsboven (naam uit metadata, anders e-mail)
@@ -400,6 +459,7 @@
         logo_pad:(a.logo_pad||null),
         actueel_banksaldo:(a.actueel_banksaldo!=null?Number(a.actueel_banksaldo):null),
         actueel_banksaldo_datum:(a.actueel_banksaldo_datum||null),
+        welkom_verbergen:!!a.welkom_verbergen,
         gearchiveerd:!!a.gearchiveerd
       };
     });
