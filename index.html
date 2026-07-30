@@ -2591,11 +2591,19 @@
         : (isCredit
           ? '<span style="font-size:10px; font-weight:700; color:var(--rood); background:#FBEDEA; border:1px solid var(--rood); border-radius:5px; padding:2px 7px;">Credit</span>'
           : '<span style="font-size:10px; font-weight:700; color:var(--groen); background:#F1F6F1; border:1px solid var(--groen); border-radius:5px; padding:2px 7px;">Factuur</span>');
+      // Betaald-knop alleen bij gewone facturen (niet offertes, niet credits)
+      var betaaldKnop = "";
+      if(!isOff && !isCredit){
+        betaaldKnop = f.betaald
+          ? '<button class="fac-betaald" data-id="'+f.id+'" data-betaald="1" title="Betaald op '+ontsnap(f.betaald_datum||"")+' — klik om terug te zetten" style="font-size:10px; font-weight:700; color:var(--groen); background:#F1F6F1; border:1px solid var(--groen); border-radius:5px; padding:3px 9px; cursor:pointer;">✓ Betaald</button>'
+          : '<button class="fac-betaald" data-id="'+f.id+'" data-betaald="0" title="Markeer als betaald" style="font-size:10px; font-weight:700; color:var(--grijs); background:transparent; border:1px solid var(--rand); border-radius:5px; padding:3px 9px; cursor:pointer;">Openstaand</button>';
+      }
       return '<div class="fac-rij" data-id="'+f.id+'" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-top:1px solid var(--rand-licht); cursor:pointer;">'+
         '<div style="flex:1; min-width:0;">'+
           '<div style="font-size:12.5px; font-weight:600; color:var(--navy);">'+ontsnap(naam)+(f.factuurnummer?' <span style="color:var(--grijs); font-weight:400;">· '+ontsnap(f.factuurnummer)+'</span>':'')+'</div>'+
           '<div style="font-size:11px; color:var(--grijs);">'+(f.factuurdatum||"geen datum")+(f.omschrijving?' · '+ontsnap(f.omschrijving.slice(0,50)):'')+'</div>'+
         '</div>'+
+        betaaldKnop+
         badge+
         '<div style="width:100px; text-align:right; font-size:12.5px; font-weight:600; color:'+(isCredit?'var(--rood)':'var(--navy)')+'; font-variant-numeric:tabular-nums;">'+eur(f.totaal_incl)+'</div>'+
       '</div>';
@@ -2607,13 +2615,33 @@
         (isOff ? 'Nog geen offertes. Maak er een aan bij \u201cNieuwe offerte\u201d.' : 'Nog geen facturen. Een offerte wordt een factuur zodra je hem akkoord geeft.')+'</div>';
     } else {
       html += '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; overflow:hidden;">'+lijst.map(rij).join("")+'</div>';
+      if(!isOff){
+        var openstaand = lijst.filter(function(f){ return f.soort!=='credit' && !f.betaald; }).reduce(function(s,f){ return s+(Number(f.totaal_incl)||0); }, 0);
+        html += '<div style="display:flex; justify-content:space-between; align-items:center; background:var(--papier); border:1px solid var(--rand); border-radius:10px; padding:11px 16px; margin-top:12px;">'+
+          '<span style="font-size:12px; color:var(--navy); font-weight:600;">Openstaand (nog te ontvangen)</span>'+
+          '<span style="font-size:14px; font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums;">'+eur(openstaand)+'</span>'+
+        '</div>';
+      }
       html += '<div style="font-size:10.5px; color:var(--grijs); margin-top:12px; line-height:1.5;">'+
         (isOff
           ? 'Klik een offerte aan om te openen, te versturen of om te zetten naar een factuur. Een offerte telt nog niet mee in je omzet.'
-          : 'Klik een factuur aan om te bekijken of opnieuw te versturen. Facturen zijn vastgelegd en als omzet geboekt.')+'</div>';
+          : 'Klik een factuur aan om te bekijken. Zet een factuur op \u201cBetaald\u201d zodra je de betaling hebt ontvangen — zo houd je bij wat er nog openstaat (je debiteuren).')+'</div>';
     }
     html += '</div>';
     schermEl.innerHTML = html;
+
+    // Betaald-toggle (mag de rij niet openen)
+    Array.prototype.forEach.call(schermEl.querySelectorAll('.fac-betaald'), function(btn){
+      btn.onclick = async function(e){
+        e.stopPropagation();
+        var nu = btn.getAttribute('data-betaald') === "1";
+        var wordt = !nu;
+        var upd = { betaald:wordt, betaald_datum: wordt ? new Date().toISOString().slice(0,10) : null };
+        var r = await dbClient().from('adm_facturen').update(upd).eq('id', btn.getAttribute('data-id'));
+        if(r.error){ await fwMelding("Bijwerken mislukt: " + r.error.message); return; }
+        await schermFacturenOverzicht(type);
+      };
+    });
 
     Array.prototype.forEach.call(schermEl.querySelectorAll('.fac-rij'), function(row){
       row.onclick = async function(){
@@ -2621,7 +2649,6 @@
         if(isOff){
           curItem = "nieuw"; renderNav(); await renderScherm();
         } else {
-          // Definitieve factuur: direct het voorbeeld openen (bekijken/opnieuw versturen)
           await toonFactuurVoorbeeld(factuurConcept);
         }
       };
