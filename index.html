@@ -2611,6 +2611,12 @@
     }
 
     var html = '<div style="max-width:720px;">';
+    if(isOff){
+      html += '<div style="display:flex; justify-content:flex-end; margin-bottom:14px;">'+
+        '<button id="ov-nieuwe-offerte" style="display:inline-flex; align-items:center; gap:7px; background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:9px 15px; cursor:pointer;">'+
+          '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Nieuwe offerte</button>'+
+      '</div>';
+    }
     if(!lijst.length){
       html += '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:28px; text-align:center; color:var(--grijs); font-size:12.5px;">'+
         (isOff ? 'Nog geen offertes. Maak er een aan bij \u201cNieuwe offerte\u201d.' : 'Nog geen facturen. Een offerte wordt een factuur zodra je hem akkoord geeft.')+'</div>';
@@ -2630,6 +2636,14 @@
     }
     html += '</div>';
     schermEl.innerHTML = html;
+
+    var novBtn = document.getElementById('ov-nieuwe-offerte');
+    if(novBtn){
+      novBtn.onclick = async function(){
+        factuurConcept = null;   // schoon beginnen
+        curItem = "nieuw"; renderNav(); await renderScherm();
+      };
+    }
 
     // Betaald-toggle (mag de rij niet openen)
     Array.prototype.forEach.call(schermEl.querySelectorAll('.fac-betaald'), function(btn){
