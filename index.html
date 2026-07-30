@@ -2606,6 +2606,7 @@
         betaaldKnop+
         badge+
         '<div style="width:100px; text-align:right; font-size:12.5px; font-weight:600; color:'+(isCredit?'var(--rood)':'var(--navy)')+'; font-variant-numeric:tabular-nums;">'+eur(f.totaal_incl)+'</div>'+
+        '<button class="fac-verwijder" data-id="'+f.id+'" title="Verwijderen" style="background:none; border:none; color:var(--grijs); cursor:pointer; padding:2px; display:flex; flex-shrink:0;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"/></svg></button>'+
       '</div>';
     }
 
@@ -2639,6 +2640,45 @@
         var upd = { betaald:wordt, betaald_datum: wordt ? new Date().toISOString().slice(0,10) : null };
         var r = await dbClient().from('adm_facturen').update(upd).eq('id', btn.getAttribute('data-id'));
         if(r.error){ await fwMelding("Bijwerken mislukt: " + r.error.message); return; }
+        await schermFacturenOverzicht(type);
+      };
+    });
+
+    // Verwijderen (offerte: lichte bevestiging; factuur/credit: nummer overtypen + boeking mee)
+    Array.prototype.forEach.call(schermEl.querySelectorAll('.fac-verwijder'), function(btn){
+      btn.onclick = async function(e){
+        e.stopPropagation();
+        var id = btn.getAttribute('data-id');
+        var f = lijst.filter(function(x){ return x.id === id; })[0];
+        if(!f) return;
+        var isDef = (f.status === 'definitief');
+
+        if(!isDef){
+          // Offerte: veilig te verwijderen
+          var ok = await fwBevestig("Deze offerte verwijderen?\n\nEen offerte is niet geboekt, dus dit heeft geen gevolgen voor je omzet of btw.", { okLabel:"Verwijderen", annuleerLabel:"Annuleren" });
+          if(!ok) return;
+        } else {
+          // Factuur of creditfactuur: fiscaal gevoelig
+          var stuk = (f.soort === 'credit') ? "creditfactuur" : "factuur";
+          var bevestig = await fwVraag(
+            "Let op: deze "+stuk+" ("+ (f.factuurnummer||"") +") is geboekt en telt mee in je omzet en btw.\n\n"+
+            "Een verstuurde factuur hoor je NIET te verwijderen — de Belastingdienst eist een doorlopende nummering zonder gaten. Verwijder alleen een test- of foutieve "+stuk+" die nooit is verstuurd. Voor een echte correctie gebruik je een creditfactuur.\n\n"+
+            "De bijbehorende omzetboeking wordt mee verwijderd, zodat je administratie klopt.\n\n"+
+            "Typ het nummer "+(f.factuurnummer||"")+" om te bevestigen:",
+            "", "Factuur verwijderen"
+          );
+          if(bevestig === null) return;
+          if(bevestig.trim() !== (f.factuurnummer||"")){ await fwMelding("Het nummer kwam niet overeen. Er is niets verwijderd."); return; }
+        }
+
+        // Bijbehorende omzetboeking mee verwijderen (indien aanwezig)
+        if(f.boeking_id){
+          var rb = await dbClient().from('adm_boekingen').delete().eq('id', f.boeking_id);
+          if(rb.error){ await fwMelding("Kon de omzetboeking niet verwijderen: " + rb.error.message); return; }
+        }
+        // Regels en bonnen gaan mee via de cascade (on delete cascade); factuur zelf verwijderen
+        var r = await dbClient().from('adm_facturen').delete().eq('id', id);
+        if(r.error){ await fwMelding("Verwijderen mislukt: " + r.error.message); return; }
         await schermFacturenOverzicht(type);
       };
     });
