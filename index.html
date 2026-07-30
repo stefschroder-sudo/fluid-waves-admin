@@ -28,6 +28,7 @@
   .fw-item.actief { background: var(--papier-diep); box-shadow: inset 3px 0 0 var(--goud); }
   .fw-top { cursor: pointer; user-select: none; font-weight: 600; }
   .fw-top.actief { color: var(--navy) !important; font-weight: 700; background: #FFFFFF; border-bottom: 3px solid var(--goud) !important; margin-bottom: -1px; }
+  .fw-top.actief[data-kamp="ondernemer"] { color: #FFFFFF !important; background: #2A4372 !important; }
   .fw-note { max-width: 1080px; margin: 12px auto 0; font-size: 12px; color: #7A756A; text-align: center; }
   .fw-leeg { padding: 40px 20px; text-align: center; color: var(--grijs); }
   .fw-leeg i { font-size: 30px; color: var(--rand); display: block; margin-bottom: 8px; }
@@ -4058,17 +4059,23 @@
   var ACCOUNTANT_VIEWS = ["belasting", "resultaat", "balans", "ib"];
   function pasMenuKleurenToe(){
     if(!MENU_KLEURSCHEIDING) return;
-    // Kleuren: ondernemer = navy-accent, accountant = gedempt grijsblauw
-    var kleurOndernemer = "#1B2C4F";   // navy
-    var kleurAccountant = "#6B7A8F";   // rustig grijsblauw
+    var navyBase = "#1B2C4F";      // ondernemer, niet-actief
+    var navyActief = "#2A4372";    // ondernemer, actief (iets feller)
+    var kleurAccountant = "#6B7A8F";
     Array.prototype.forEach.call(document.querySelectorAll('.fw-top'), function(t){
       var v = t.getAttribute('data-view');
-      if(ACCOUNTANT_VIEWS.indexOf(v) >= 0){
-        t.setAttribute('data-kamp', 'accountant');
-        if(!t.classList.contains('actief')) t.style.color = kleurAccountant;
-      } else if(ONDERNEMER_VIEWS.indexOf(v) >= 0){
+      var actief = t.classList.contains('actief');
+      if(ONDERNEMER_VIEWS.indexOf(v) >= 0){
         t.setAttribute('data-kamp', 'ondernemer');
-        if(!t.classList.contains('actief')) t.style.color = kleurOndernemer;
+        // Gevulde navy tab met witte letters; actief = feller + gouden onderstreping
+        t.style.background = actief ? navyActief : navyBase;
+        t.style.color = "#FFFFFF";
+        t.style.borderBottom = actief ? "3px solid var(--goud)" : "2px solid transparent";
+        t.style.borderRadius = "6px 6px 0 0";
+      } else if(ACCOUNTANT_VIEWS.indexOf(v) >= 0){
+        t.setAttribute('data-kamp', 'accountant');
+        t.style.background = "transparent";
+        if(!actief) t.style.color = kleurAccountant;
       }
     });
     // Scheidingsstreepje tussen de twee kampen (vóór de eerste accountant-tab)
