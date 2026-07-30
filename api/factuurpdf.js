@@ -80,7 +80,8 @@ export default async function handler(req, res) {
       } catch (e) { /* logo overslaan bij fout */ }
     }
     text(bedrijf.naam || "", M + logoBreedte, height - 46, { size: 18, bold: true, color: WIT });
-    text((b.soort === "offerte" ? "OFFERTE" : "FACTUUR"), M + logoBreedte, height - 68, { size: 11, color: GOUD });
+    var kopType = (b.soort === "offerte") ? "OFFERTE" : (b.soort === "credit" ? "CREDITFACTUUR" : "FACTUUR");
+    text(kopType, M + logoBreedte, height - 68, { size: 11, color: GOUD });
 
     var bx = width - M;
     var ry = height - 34;
@@ -101,10 +102,16 @@ export default async function handler(req, res) {
     });
 
     var isOfferte = (b.soort === "offerte");
-    textR(isOfferte ? "Offertenummer" : "Factuurnummer", width - M - 90, y, { size: 8.5, color: GRIJS });
-    textR(b.factuurnummer || (isOfferte ? "concept" : "concept"), width - M, y, { size: 9.5, bold: true });
-    textR(isOfferte ? "Offertedatum" : "Factuurdatum", width - M - 90, y - 15, { size: 8.5, color: GRIJS });
+    var isCredit = (b.soort === "credit");
+    var nrLabel = isOfferte ? "Offertenummer" : (isCredit ? "Creditnummer" : "Factuurnummer");
+    var datLabel = isOfferte ? "Offertedatum" : (isCredit ? "Creditdatum" : "Factuurdatum");
+    textR(nrLabel, width - M - 90, y, { size: 8.5, color: GRIJS });
+    textR(b.factuurnummer || "concept", width - M, y, { size: 9.5, bold: true });
+    textR(datLabel, width - M - 90, y - 15, { size: 8.5, color: GRIJS });
     textR(b.factuurdatum || "", width - M, y - 15, { size: 9.5 });
+    if (isCredit && b.credit_van_nummer) {
+      textR("bij factuur " + b.credit_van_nummer, width - M, y - 30, { size: 8.5, color: GRIJS });
+    }
 
     y -= 75;
     if (b.omschrijving && b.omschrijving.trim()) {
@@ -155,7 +162,9 @@ export default async function handler(req, res) {
     y -= 45;
 
     page.drawLine({ start: { x: M, y: y }, end: { x: width - M, y: y }, thickness: 0.5, color: LIJN }); y -= 16;
-    if (isOfferte) {
+    if (isCredit) {
+      text("Dit is een creditfactuur" + (b.credit_van_nummer ? " bij factuur " + b.credit_van_nummer : "") + ". Het bedrag wordt in mindering gebracht of terugbetaald.", M, y, { size: 9 });
+    } else if (isOfferte) {
       text("Dit is een offerte, geen factuur. Na akkoord ontvangt u de definitieve factuur.", M, y, { size: 9 }); y -= 13;
       if (b.geldigheid) { text(b.geldigheid, M, y, { size: 9, color: GRIJS }); }
     } else {
