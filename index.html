@@ -28,6 +28,21 @@
   .fw-item.actief { background: var(--papier-diep); box-shadow: inset 3px 0 0 var(--goud); }
   .fw-top { cursor: pointer; user-select: none; font-weight: 600; }
   .fw-top.actief { color: var(--navy) !important; font-weight: 700; background: #FFFFFF; border-bottom: 3px solid var(--goud) !important; margin-bottom: -1px; }
+  .fw-top[data-tip] { position: relative; }
+  .fw-top[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(-4px);
+    background: #1B2C4F; color: #FFFFFF; font-size: 11px; font-weight: 600; line-height: 1.35;
+    padding: 8px 11px; border-radius: 7px; white-space: normal; width: max-content; max-width: 230px;
+    box-shadow: 0 4px 14px rgba(27,44,79,.28); border: 1px solid var(--goud);
+    opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 3000;
+  }
+  .fw-top[data-tip]::before {
+    content: ""; position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-bottom-color: #1B2C4F; opacity: 0; transition: opacity .15s; z-index: 3001;
+  }
+  .fw-top[data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .fw-top[data-tip]:hover::before { opacity: 1; }
   .fw-note { max-width: 1080px; margin: 12px auto 0; font-size: 12px; color: #7A756A; text-align: center; }
   .fw-leeg { padding: 40px 20px; text-align: center; color: var(--grijs); }
   .fw-leeg i { font-size: 30px; color: var(--rand); display: block; margin-bottom: 8px; }
@@ -121,10 +136,10 @@
 
   <!-- ── Bovenmenu ─────────────────────────────────────────────────────────── -->
   <div id="fw-topmenu" style="display:flex; gap:2px; background:var(--wit); padding:0 20px; border-bottom:1px solid var(--rand); flex-wrap:wrap;">
-    <div class="fw-top actief" data-view="dashboard" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 4h7v9H4zM4 16h7v4H4zM13 4h7v4h-7zM13 11h7v9h-7z"/></svg>Dashboard</div>
-    <div class="fw-top" data-view="invoeren" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16zM13.5 6.5l4 4M16 19h6M19 16v6"/></svg>Invoeren</div>
-    <div class="fw-top" data-view="facturen" title="Maak en verstuur jouw offertes en facturen" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M6 2h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>Offertes en Facturen</div>
-    <div class="fw-top" data-view="btw" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M5 21V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16l-3-2-2 2-2-2-2 2-2-2z"/><path d="M9 9l6 6M9 9.5v-.5M15 15v-.5"/></svg>BTW-aangifte</div>
+    <div class="fw-top actief" data-view="dashboard" data-tip="Jouw complete overzicht" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 4h7v9H4zM4 16h7v4H4zM13 4h7v4h-7zM13 11h7v9h-7z"/></svg>1. Dashboard</div>
+    <div class="fw-top" data-view="invoeren" data-tip="Voer al jouw inkomsten en uitgaven in" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16zM13.5 6.5l4 4M16 19h6M19 16v6"/></svg>3. Omzet, Kosten en Bedrijfsmiddelen</div>
+    <div class="fw-top" data-view="facturen" data-tip="Maak en verstuur jouw offertes en facturen die automatisch in de omzet worden geboekt" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M6 2h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>2. Offertes en Facturen</div>
+    <div class="fw-top" data-view="btw" data-tip="Aan het einde van jouw gekozen periode, maand of kwartaal, verschijnt hier de BTW aangifte" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M5 21V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16l-3-2-2 2-2-2-2 2-2-2z"/><path d="M9 9l6 6M9 9.5v-.5M15 15v-.5"/></svg>4. BTW aangifte</div>
     <div class="fw-top" data-view="belasting" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 11h.01M15 11h.01"/></svg>Belastingregels</div>
     <div class="fw-top" data-view="resultaat" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 19h16M4 15l4-6 4 3 4-8"/></svg>Resultaat</div>
     <div class="fw-top" data-view="balans" style="display:flex; align-items:center; gap:6px; padding:11px 14px; font-size:12.5px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 3v18M7 21h10M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0zM3 7h18"/></svg>Balans</div>
