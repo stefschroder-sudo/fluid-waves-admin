@@ -1813,18 +1813,18 @@
         '</div>'+
         '<div style="border-top:1px solid var(--rand-licht); margin-top:16px; padding-top:14px;">'+
           '<div style="font-size:11px; color:var(--grijs); margin-bottom:8px;">Rekenmachine — handig om bijvoorbeeld saldi van meerdere rekeningen op te tellen.</div>'+
-          '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">'+
-            '<input id="calc-scherm" type="text" readonly value="0" style="flex:1; min-width:160px; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:15px; background:var(--papier); text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:var(--navy);">'+
-            '<button id="calc-naar-saldo" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:8px; font-size:11.5px; font-weight:600; padding:9px 12px; cursor:pointer; white-space:nowrap;">→ naar saldo</button>'+
+          '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; max-width:230px;">'+
+            '<input id="calc-scherm" type="text" readonly value="0" style="flex:1; min-width:110px; padding:6px 9px; border:1px solid var(--rand); border-radius:7px; font-size:13px; background:var(--papier); text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:var(--navy);">'+
+            '<button id="calc-naar-saldo" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:7px; font-size:10px; font-weight:600; padding:6px 8px; cursor:pointer; white-space:nowrap;">→ saldo</button>'+
           '</div>'+
-          '<div id="calc-knoppen" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:8px; max-width:280px;">'+
+          '<div id="calc-knoppen" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:4px; margin-top:6px; max-width:230px;">'+
             ['C','←','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','=',''].map(function(k){
               if(k==='') return '<span></span>';
               var isOp = ('÷×−+=%'.indexOf(k) >= 0);
               var isWis = (k==='C'||k==='←');
               var bg = isOp ? 'var(--navy)' : (isWis ? 'var(--papier)' : 'var(--wit)');
               var kl = isOp ? 'var(--papier)' : 'var(--inkt)';
-              return '<button class="calc-k" data-k="'+k+'" style="padding:11px 0; border:1px solid var(--rand); border-radius:8px; background:'+bg+'; color:'+kl+'; font-size:14px; font-weight:600; cursor:pointer;">'+k+'</button>';
+              return '<button class="calc-k" data-k="'+k+'" style="padding:7px 0; border:1px solid var(--rand); border-radius:6px; background:'+bg+'; color:'+kl+'; font-size:12px; font-weight:600; cursor:pointer;">'+k+'</button>';
             }).join("")+
           '</div>'+
         '</div>'+
