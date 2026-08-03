@@ -442,7 +442,7 @@
       var verberg = document.getElementById('fw-welkom-verberg').checked;
       if(verberg && curAdmin){
         try {
-          await dbClient().from('adm_administraties').update({ welkom_verbergen:true }).eq('id', curAdmin);
+          await dbClient().schema('smart_admin').from('administraties').update({ welkom_verbergen:true }).eq('id', curAdmin);
           if(admins[curAdmin]) admins[curAdmin].welkom_verbergen = true;
         } catch(e){}
       }
@@ -471,7 +471,7 @@
 
   async function laadAdmins(){
     admins = {};
-    var r = await dbClient().from('adm_administraties').select('*').order('aangemaakt');
+    var r = await dbClient().schema('smart_admin').from('administraties').select('*').order('aangemaakt');
     if(r.error){
       await fwMelding("Kon administraties niet laden: " + r.error.message);
       return;
@@ -507,7 +507,7 @@
       root.style.display = "none";
       return false;
     }
-    var r = await dbClient().from('adm_administraties')
+    var r = await dbClient().schema('smart_admin').from('administraties')
       .insert({ user_id:user.id, naam:naam })
       .select().single();
     if(r.error){ await fwMelding("Aanmaken mislukt: "+r.error.message); return false; }
@@ -739,7 +739,7 @@
       if(!naam){ await fwMelding("Geef de administratie een naam."); return; }
       this.textContent = "Bezig…"; this.disabled = true;
       var g = function(x){ return document.getElementById(x).value.trim() || null; };
-      var r = await dbClient().from('adm_administraties').update({
+      var r = await dbClient().schema('smart_admin').from('administraties').update({
         naam:naam, kvk:g('bh-kvk'), btw_nummer:g('bh-btw')
       }).eq('id', id);
       if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
@@ -759,7 +759,7 @@
       } else {
         sluit();
       }
-      var r = await dbClient().from('adm_administraties').update({ gearchiveerd:wordtGearchiveerd }).eq('id', id);
+      var r = await dbClient().schema('smart_admin').from('administraties').update({ gearchiveerd:wordtGearchiveerd }).eq('id', id);
       if(r.error){ await fwMelding("Mislukt: " + r.error.message); return; }
       await laadAdmins(); applyAdmin(); renderAdmins(); await renderScherm();
     };
@@ -802,7 +802,7 @@
       if(bevestig.trim() !== a.naam){ await fwMelding("De naam kwam niet overeen. Er is niets verwijderd."); return; }
       var fout = await leegAdmin(id);   // eerst boekingen + bestanden weg
       if(fout){ await fwMelding("Verwijderen mislukt: " + fout); return; }
-      var r = await dbClient().from('adm_administraties').delete().eq('id', id);
+      var r = await dbClient().schema('smart_admin').from('administraties').delete().eq('id', id);
       if(r.error){ await fwMelding("Verwijderen mislukt: " + r.error.message); return; }
       if(curAdmin === id) curAdmin = null;
       await fwMelding("\""+a.naam+"\" is volledig verwijderd.");
@@ -815,7 +815,7 @@
   // Geeft null bij succes, anders een foutmelding-tekst.
   async function leegAdmin(id, jaar){
     // Boekingen ophalen (met datum en bestandspad) om te bepalen wat weg moet
-    var r = await dbClient().from('adm_boekingen').select('id, datum, bestand_pad').eq('administratie_id', id);
+    var r = await dbClient().schema('smart_admin').from('boekingen').select('id, datum, bestand_pad').eq('administratie_id', id);
     if(r.error) return r.error.message;
     var rijen = r.data || [];
     if(jaar){
@@ -832,11 +832,11 @@
     // 2. Boekingen verwijderen — op id's (zodat het jaar-filter klopt)
     var ids = rijen.map(function(b){ return b.id; });
     if(ids.length){
-      var rd = await dbClient().from('adm_boekingen').delete().in('id', ids);
+      var rd = await dbClient().schema('smart_admin').from('boekingen').delete().in('id', ids);
       if(rd.error) return rd.error.message;
     }
     // 3. Btw-statussen opruimen — per jaar of alles
-    var q = dbClient().from('adm_btw_status').delete().eq('administratie_id', id);
+    var q = dbClient().schema('smart_admin').from('btw_status').delete().eq('administratie_id', id);
     if(jaar){ q = q.eq('jaar', jaar); }
     await q;
     return null;
@@ -871,7 +871,7 @@
 
   async function toonBeheer(){
     // Alle logregels van deze eigenaar ophalen
-    var r = await dbClient().from('adm_api_log').select('*').order('aangemaakt', { ascending:false });
+    var r = await dbClient().schema('smart_admin').from('api_log').select('*').order('aangemaakt', { ascending:false });
     var rijen = (r.error || !r.data) ? [] : r.data;
 
     var totaalKosten = 0, totaalAanroepen = rijen.length, totInTok = 0, totUitTok = 0;
@@ -1039,7 +1039,7 @@
 
   async function laadBtwStatus(){
     if(!curAdmin) return {};
-    var r = await dbClient().from('adm_btw_status').select('*').eq('administratie_id', curAdmin);
+    var r = await dbClient().schema('smart_admin').from('btw_status').select('*').eq('administratie_id', curAdmin);
     if(r.error){ console.error(r.error); return {}; }
     var map = {};
     // Sleutel: jaar-type-nummer, bv. "2026-kwartaal-2" of "2026-maand-7"
@@ -1048,7 +1048,7 @@
   }
 
   async function zetBtwStatus(jaar, type, nummer, status, bedrag){
-    var r = await dbClient().from('adm_btw_status')
+    var r = await dbClient().schema('smart_admin').from('btw_status')
       .upsert({ administratie_id:curAdmin, user_id:user.id, jaar:jaar,
                 periode_type:type, periode_nummer:nummer,
                 status:status, bedrag:bedrag, bijgewerkt:new Date().toISOString() },
@@ -1213,7 +1213,7 @@
     try {
       if(!verbruik) return;
       var kosten = berekenKosten(verbruik.model, verbruik.input_tokens, verbruik.output_tokens);
-      await dbClient().from('adm_api_log').insert({
+      await dbClient().schema('smart_admin').from('api_log').insert({
         user_id: user.id, functie: functie, model: verbruik.model || null,
         input_tokens: Number(verbruik.input_tokens)||0,
         output_tokens: Number(verbruik.output_tokens)||0,
@@ -1224,7 +1224,7 @@
 
   async function laadBoekingen(soort){
     if(!curAdmin) return [];   // geen administratie geselecteerd → niets te laden
-    var r = await dbClient().from('adm_boekingen')
+    var r = await dbClient().schema('smart_admin').from('boekingen')
       .select('*')
       .eq('administratie_id', curAdmin)
       .eq('soort', soort)
@@ -1236,19 +1236,19 @@
   async function bewaarBoeking(rec){
     rec.user_id = user.id;
     rec.administratie_id = curAdmin;
-    var r = await dbClient().from('adm_boekingen').insert(rec).select().single();
+    var r = await dbClient().schema('smart_admin').from('boekingen').insert(rec).select().single();
     if(r.error){ await fwMelding("Opslaan mislukt: "+r.error.message); return null; }
     return r.data;
   }
 
   async function wijzigBoeking(id, rec){
-    var r = await dbClient().from('adm_boekingen').update(rec).eq('id', id).select().single();
+    var r = await dbClient().schema('smart_admin').from('boekingen').update(rec).eq('id', id).select().single();
     if(r.error){ await fwMelding("Bijwerken mislukt: "+r.error.message); return null; }
     return r.data;
   }
 
   async function verwijderBoeking(id){
-    var r = await dbClient().from('adm_boekingen').delete().eq('id', id);
+    var r = await dbClient().schema('smart_admin').from('boekingen').delete().eq('id', id);
     if(r.error){ await fwMelding("Verwijderen mislukt: "+r.error.message); }
   }
 
@@ -1609,7 +1609,7 @@
         var nu = b.getAttribute('data-betaald') === "1";
         var wordt = !nu;
         var upd = { betaald:wordt, betaald_datum: wordt ? new Date().toISOString().slice(0,10) : null };
-        var r = await dbClient().from('adm_boekingen').update(upd).eq('id', b.getAttribute('data-id'));
+        var r = await dbClient().schema('smart_admin').from('boekingen').update(upd).eq('id', b.getAttribute('data-id'));
         if(r.error){ await fwMelding("Bijwerken mislukt: " + r.error.message); return; }
         await renderScherm();
       };
@@ -1850,7 +1850,7 @@
         actueel_banksaldo: (bedrag===""?null:Number(bedrag)),
         actueel_banksaldo_datum: (bedrag===""?null:datum)
       };
-      var r = await dbClient().from('adm_administraties').update(upd).eq('id', curAdmin);
+      var r = await dbClient().schema('smart_admin').from('administraties').update(upd).eq('id', curAdmin);
       this.textContent = "Opslaan"; this.disabled = false;
       if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); return; }
       // In-memory bijwerken zodat de balans het meteen ziet
@@ -2322,7 +2322,7 @@
       }
 
       var g = function(x){ return document.getElementById(x).value.trim() || null; };
-      var r = await dbClient().from('adm_administraties').update({
+      var r = await dbClient().schema('smart_admin').from('administraties').update({
         naam:naam, kvk:g('bd-kvk'), btw_nummer:g('bd-btw'),
         adres:g('bd-adres'), postcode:g('bd-postcode'), plaats:g('bd-plaats'),
         email:g('bd-email'), telefoon:g('bd-telefoon'), iban:g('bd-iban'),
@@ -2339,7 +2339,7 @@
   // ── Facturen: klantenlijst ───────────────────────────────────────────────
   async function laadKlanten(){
     if(!curAdmin) return [];
-    var r = await dbClient().from('adm_klanten').select('*').eq('administratie_id', curAdmin).order('naam');
+    var r = await dbClient().schema('smart_admin').from('klanten').select('*').eq('administratie_id', curAdmin).order('naam');
     if(r.error){ console.error(r.error); return []; }
     return r.data;
   }
@@ -2430,9 +2430,9 @@
       var r;
       if(nieuw){
         rec.user_id = user.id; rec.administratie_id = curAdmin;
-        r = await dbClient().from('adm_klanten').insert(rec);
+        r = await dbClient().schema('smart_admin').from('klanten').insert(rec);
       } else {
-        r = await dbClient().from('adm_klanten').update(rec).eq('id', klant.id);
+        r = await dbClient().schema('smart_admin').from('klanten').update(rec).eq('id', klant.id);
       }
       if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
       sluit();
@@ -2444,7 +2444,7 @@
         sluit();
         var ok = await fwBevestig("Klant \""+klant.naam+"\" verwijderen?\n\nBestaande facturen aan deze klant blijven bestaan.", { okLabel:"Verwijderen", annuleerLabel:"Annuleren" });
         if(!ok) return;
-        var r = await dbClient().from('adm_klanten').delete().eq('id', klant.id);
+        var r = await dbClient().schema('smart_admin').from('klanten').delete().eq('id', klant.id);
         if(r.error){ await fwMelding("Verwijderen mislukt: " + r.error.message); return; }
         await schermKlanten();
       };
@@ -2776,7 +2776,7 @@
     var a = admins[curAdmin] || {};
     var klant = null;
     if(c.klant_id){
-      var k = await dbClient().from('adm_klanten').select('*').eq('id', c.klant_id).single();
+      var k = await dbClient().schema('smart_admin').from('klanten').select('*').eq('id', c.klant_id).single();
       if(!k.error) klant = k.data;
     }
     var logo_base64 = null;
@@ -2892,13 +2892,13 @@
   async function volgendFactuurnummer(datum){
     var d = datum ? new Date(datum) : new Date();
     var jaar = d.getFullYear();
-    var a = await dbClient().from('adm_administraties').select('factuur_teller, factuur_teller_jaar').eq('id', curAdmin).single();
+    var a = await dbClient().schema('smart_admin').from('administraties').select('factuur_teller, factuur_teller_jaar').eq('id', curAdmin).single();
     if(a.error) throw new Error(a.error.message);
     var teller = a.data.factuur_teller || 0;
     var tellerJaar = a.data.factuur_teller_jaar;
     if(tellerJaar !== jaar){ teller = 0; }   // nieuw jaar → reset
     teller += 1;
-    var u = await dbClient().from('adm_administraties').update({ factuur_teller:teller, factuur_teller_jaar:jaar }).eq('id', curAdmin);
+    var u = await dbClient().schema('smart_admin').from('administraties').update({ factuur_teller:teller, factuur_teller_jaar:jaar }).eq('id', curAdmin);
     if(u.error) throw new Error(u.error.message);
     var dd = String(d.getDate()).padStart(2,'0');
     var mm = String(d.getMonth()+1).padStart(2,'0');
@@ -2915,7 +2915,7 @@
 
       // Omzetboeking aanmaken (netto excl. btw, totale btw over de factuur)
       var klantNaam = "";
-      if(c.klant_id){ var k = await dbClient().from('adm_klanten').select('naam').eq('id', c.klant_id).single(); if(!k.error) klantNaam = k.data.naam; }
+      if(c.klant_id){ var k = await dbClient().schema('smart_admin').from('klanten').select('naam').eq('id', c.klant_id).single(); if(!k.error) klantNaam = k.data.naam; }
       var isCredit = (c.soort === 'credit');
       var boeking = {
         administratie_id:curAdmin, user_id:user.id, soort:'omzet',
@@ -2925,11 +2925,11 @@
         btw_pct:(function(){ var ps=Object.keys(t.perTarief).map(Number); return ps.length?Math.max.apply(null,ps):21; })(),
         bron:(isCredit?'creditfactuur':'factuur')
       };
-      var ins = await dbClient().from('adm_boekingen').insert(boeking).select().single();
+      var ins = await dbClient().schema('smart_admin').from('boekingen').insert(boeking).select().single();
       if(ins.error) return ins.error.message;
 
       // Factuur bijwerken: definitief + nummer + koppeling aan de boeking
-      var u = await dbClient().from('adm_facturen').update({
+      var u = await dbClient().schema('smart_admin').from('facturen').update({
         status:'definitief', factuurnummer:nummer, boeking_id:ins.data.id, bijgewerkt:new Date().toISOString()
       }).eq('id', c.id);
       if(u.error) return u.error.message;
@@ -2954,11 +2954,11 @@
     };
     var factuurId = c.id;
     if(factuurId){
-      var u = await dbClient().from('adm_facturen').update(kop).eq('id', factuurId);
+      var u = await dbClient().schema('smart_admin').from('facturen').update(kop).eq('id', factuurId);
       if(u.error) return u.error.message;
-      await dbClient().from('adm_factuurregels').delete().eq('factuur_id', factuurId);
+      await dbClient().schema('smart_admin').from('factuurregels').delete().eq('factuur_id', factuurId);
     } else {
-      var ins = await dbClient().from('adm_facturen').insert(kop).select().single();
+      var ins = await dbClient().schema('smart_admin').from('facturen').insert(kop).select().single();
       if(ins.error) return ins.error.message;
       factuurId = ins.data.id;
       c.id = factuurId;
@@ -2974,7 +2974,7 @@
         volgorde:idx
       };
     });
-    var ri = await dbClient().from('adm_factuurregels').insert(regelRijen);
+    var ri = await dbClient().schema('smart_admin').from('factuurregels').insert(regelRijen);
     if(ri.error) return ri.error.message;
 
     // Nieuwe bonnen uploaden (die met een 'file'); bestaande blijven staan
@@ -2986,7 +2986,7 @@
           var pad = user.id + "/bon_" + factuurId + "_" + Date.now() + "_" + i + "." + ext;
           var up = await dbClient().storage.from('adm-bestanden').upload(pad, b.file, { upsert:true });
           if(up.error) return up.error.message;
-          var rb = await dbClient().from('adm_factuurbonnen').insert({
+          var rb = await dbClient().schema('smart_admin').from('factuurbonnen').insert({
             factuur_id:factuurId, user_id:user.id, bestand_pad:pad, bestandsnaam:b.naam || b.file.name
           });
           if(rb.error) return rb.error.message;
@@ -3000,7 +3000,7 @@
   // ── Facturen: overzicht van opgeslagen facturen ─────────────────────────
   async function laadFacturen(){
     if(!curAdmin) return [];
-    var r = await dbClient().from('adm_facturen').select('*').eq('administratie_id', curAdmin).order('aangemaakt', { ascending:false });
+    var r = await dbClient().schema('smart_admin').from('facturen').select('*').eq('administratie_id', curAdmin).order('aangemaakt', { ascending:false });
     if(r.error){ console.error(r.error); return []; }
     return r.data;
   }
@@ -3085,7 +3085,7 @@
         var nu = btn.getAttribute('data-betaald') === "1";
         var wordt = !nu;
         var upd = { betaald:wordt, betaald_datum: wordt ? new Date().toISOString().slice(0,10) : null };
-        var r = await dbClient().from('adm_facturen').update(upd).eq('id', btn.getAttribute('data-id'));
+        var r = await dbClient().schema('smart_admin').from('facturen').update(upd).eq('id', btn.getAttribute('data-id'));
         if(r.error){ await fwMelding("Bijwerken mislukt: " + r.error.message); return; }
         await schermFacturenOverzicht(type);
       };
@@ -3120,11 +3120,11 @@
 
         // Bijbehorende omzetboeking mee verwijderen (indien aanwezig)
         if(f.boeking_id){
-          var rb = await dbClient().from('adm_boekingen').delete().eq('id', f.boeking_id);
+          var rb = await dbClient().schema('smart_admin').from('boekingen').delete().eq('id', f.boeking_id);
           if(rb.error){ await fwMelding("Kon de omzetboeking niet verwijderen: " + rb.error.message); return; }
         }
         // Regels en bonnen gaan mee via de cascade (on delete cascade); factuur zelf verwijderen
-        var r = await dbClient().from('adm_facturen').delete().eq('id', id);
+        var r = await dbClient().schema('smart_admin').from('facturen').delete().eq('id', id);
         if(r.error){ await fwMelding("Verwijderen mislukt: " + r.error.message); return; }
         await schermFacturenOverzicht(type);
       };
@@ -3144,10 +3144,10 @@
 
   // Een opgeslagen factuur (met regels en bonnen) terug in factuurConcept laden
   async function laadFactuurInConcept(factuurId){
-    var f = await dbClient().from('adm_facturen').select('*').eq('id', factuurId).single();
+    var f = await dbClient().schema('smart_admin').from('facturen').select('*').eq('id', factuurId).single();
     if(f.error){ await fwMelding("Kon factuur niet laden: " + f.error.message); return; }
-    var rg = await dbClient().from('adm_factuurregels').select('*').eq('factuur_id', factuurId).order('volgorde');
-    var bn = await dbClient().from('adm_factuurbonnen').select('*').eq('factuur_id', factuurId);
+    var rg = await dbClient().schema('smart_admin').from('factuurregels').select('*').eq('factuur_id', factuurId).order('volgorde');
+    var bn = await dbClient().schema('smart_admin').from('factuurbonnen').select('*').eq('factuur_id', factuurId);
     var d = f.data;
     factuurConcept = {
       id:d.id, klant_id:d.klant_id, factuurdatum:d.factuurdatum,
@@ -3167,9 +3167,9 @@
   // De regels worden overgenomen met negatief aantal (terugboeking); de gebruiker
   // kan regels aanpassen of verwijderen voordat hij crediteert.
   async function laadCreditConcept(factuurId){
-    var f = await dbClient().from('adm_facturen').select('*').eq('id', factuurId).single();
+    var f = await dbClient().schema('smart_admin').from('facturen').select('*').eq('id', factuurId).single();
     if(f.error){ await fwMelding("Kon factuur niet laden: " + f.error.message); return; }
-    var rg = await dbClient().from('adm_factuurregels').select('*').eq('factuur_id', factuurId).order('volgorde');
+    var rg = await dbClient().schema('smart_admin').from('factuurregels').select('*').eq('factuur_id', factuurId).order('volgorde');
     var d = f.data;
     factuurConcept = {
       id:null,                              // nieuwe factuur (credit)
@@ -3190,7 +3190,7 @@
   // ── Bedrijfsmiddelen / afschrijvingen ────────────────────────────────────
   async function laadMiddelen(){
     if(!curAdmin) return [];
-    var r = await dbClient().from('adm_bedrijfsmiddelen').select('*').eq('administratie_id', curAdmin).order('aanschafdatum', { ascending:false });
+    var r = await dbClient().schema('smart_admin').from('bedrijfsmiddelen').select('*').eq('administratie_id', curAdmin).order('aanschafdatum', { ascending:false });
     if(r.error){ console.error(r.error); return []; }
     return r.data;
   }
@@ -3395,9 +3395,9 @@
       var r;
       if(nieuw){
         rec.user_id = user.id; rec.administratie_id = curAdmin;
-        r = await dbClient().from('adm_bedrijfsmiddelen').insert(rec);
+        r = await dbClient().schema('smart_admin').from('bedrijfsmiddelen').insert(rec);
       } else {
-        r = await dbClient().from('adm_bedrijfsmiddelen').update(rec).eq('id', mid.id);
+        r = await dbClient().schema('smart_admin').from('bedrijfsmiddelen').update(rec).eq('id', mid.id);
       }
       if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
       sluit();
@@ -3409,7 +3409,7 @@
         sluit();
         var ok = await fwBevestig("Bedrijfsmiddel \""+mid.naam+"\" verwijderen?", { okLabel:"Verwijderen", annuleerLabel:"Annuleren" });
         if(!ok) return;
-        var r = await dbClient().from('adm_bedrijfsmiddelen').delete().eq('id', mid.id);
+        var r = await dbClient().schema('smart_admin').from('bedrijfsmiddelen').delete().eq('id', mid.id);
         if(r.error){ await fwMelding("Verwijderen mislukt: " + r.error.message); return; }
         await schermMiddelen();
       };
@@ -3419,7 +3419,7 @@
   // ── Leningen & investeringen ─────────────────────────────────────────────
   async function laadBalansposten(){
     if(!curAdmin) return [];
-    var r = await dbClient().from('adm_balansposten').select('*').eq('administratie_id', curAdmin).order('startdatum', { ascending:false });
+    var r = await dbClient().schema('smart_admin').from('balansposten').select('*').eq('administratie_id', curAdmin).order('startdatum', { ascending:false });
     if(r.error){ console.error(r.error); return []; }
     return r.data;
   }
@@ -3604,9 +3604,9 @@
       var r;
       if(nieuw){
         rec.user_id = user.id; rec.administratie_id = curAdmin;
-        r = await dbClient().from('adm_balansposten').insert(rec);
+        r = await dbClient().schema('smart_admin').from('balansposten').insert(rec);
       } else {
-        r = await dbClient().from('adm_balansposten').update(rec).eq('id', post.id);
+        r = await dbClient().schema('smart_admin').from('balansposten').update(rec).eq('id', post.id);
       }
       if(r.error){ await fwMelding("Opslaan mislukt: " + r.error.message); sluit(); return; }
       sluit();
@@ -3618,7 +3618,7 @@
         sluit();
         var ok = await fwBevestig("Post \""+post.naam+"\" volledig afboeken en verwijderen?\n\nGebruik dit als de lening is afgelost of de investering is beëindigd.", { okLabel:"Afboeken", annuleerLabel:"Annuleren" });
         if(!ok) return;
-        var r = await dbClient().from('adm_balansposten').delete().eq('id', post.id);
+        var r = await dbClient().schema('smart_admin').from('balansposten').delete().eq('id', post.id);
         if(r.error){ await fwMelding("Afboeken mislukt: " + r.error.message); return; }
         await schermLeningen();
       };
@@ -3628,7 +3628,7 @@
   // ── Balans ───────────────────────────────────────────────────────────────
   async function laadBalansKern(jaar){
     if(!curAdmin) return null;
-    var r = await dbClient().from('adm_balans_kern').select('*').eq('administratie_id', curAdmin).eq('jaar', jaar).maybeSingle();
+    var r = await dbClient().schema('smart_admin').from('balans_kern').select('*').eq('administratie_id', curAdmin).eq('jaar', jaar).maybeSingle();
     if(r.error){ console.error(r.error); return null; }
     return r.data;
   }
@@ -3642,9 +3642,9 @@
       bijgewerkt:new Date().toISOString()
     };
     if(bestaand){
-      return await dbClient().from('adm_balans_kern').update(rec).eq('id', bestaand.id);
+      return await dbClient().schema('smart_admin').from('balans_kern').update(rec).eq('id', bestaand.id);
     }
-    return await dbClient().from('adm_balans_kern').insert(rec);
+    return await dbClient().schema('smart_admin').from('balans_kern').insert(rec);
   }
 
   // Alle balanscijfers voor het gekozen boekjaar verzamelen
@@ -3958,7 +3958,7 @@
           { okLabel:"Ja, wijzigen", annuleerLabel:"Annuleren" }
         );
         if(!akkoord) return;
-        var r = await dbClient().from('adm_administraties').update({ btw_ritme:nieuwRitme }).eq('id', curAdmin);
+        var r = await dbClient().schema('smart_admin').from('administraties').update({ btw_ritme:nieuwRitme }).eq('id', curAdmin);
         if(r.error){ await fwMelding("Ritme opslaan mislukt: " + r.error.message); return; }
         admins[curAdmin].ritme = nieuwRitme;
         await renderScherm();
