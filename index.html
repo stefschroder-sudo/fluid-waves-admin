@@ -1392,7 +1392,45 @@
     return r.data;
   }
 
+  // ── Bewaar-check (freemium): mag deze klant gegevens bewaren? ─────────────
+  // Roept mijn_toegang aan. Bij een lopend abonnement: true. Anders: toont een
+  // waarschuwing met een knop richting abonnement, en geeft false.
+  // Het resultaat wordt kort gecachet zodat niet elke opslag opnieuw checkt.
+  var _toegangCache = null;      // { tijd, toegang }
+  var _TOEGANG_TTL = 30000;      // 30 seconden
+
+  async function heeftAbonnement(){
+    if(_toegangCache && (Date.now() - _toegangCache.tijd) < _TOEGANG_TTL){
+      return _toegangCache.toegang;
+    }
+    try {
+      var r = await dbClient().rpc('mijn_toegang', { p_app_id: 'smart-admin' });
+      var toegang = !r.error && r.data && r.data.toegang === true;
+      _toegangCache = { tijd: Date.now(), toegang: toegang };
+      return toegang;
+    } catch(e){
+      console.warn('mijn_toegang faalde:', e);
+      // Bij een technische fout de gebruiker niet blokkeren: laat bewaren toe.
+      return true;
+    }
+  }
+
+  // Reset de cache na een succesvolle betaling/abonnement (later aan te roepen).
+  function resetToegangCache(){ _toegangCache = null; }
+
+  async function magBewaren(){
+    if(await heeftAbonnement()) return true;
+    // Geen abonnement: waarschuwen en naar de etalage/abonnement verwijzen.
+    await fwMelding(
+      "In de proefmodus kun je alles invullen en bekijken, maar om je gegevens te bewaren sluit je een abonnement af.\n\n" +
+      "Ga naar Fluid Waves om Smart Admin te activeren (Try-out \u20AC10 of Vast \u20AC19,95 per maand).",
+      "Abonnement nodig om te bewaren"
+    );
+    return false;
+  }
+
   async function bewaarBoeking(rec){
+    if(!(await magBewaren())) return null;
     rec.user_id = user.id;
     rec.administratie_id = curAdmin;
     var r = await dbClient().schema('smart_admin').from('boekingen').insert(rec).select().single();
@@ -2911,7 +2949,7 @@
       this.textContent = "Bezig…"; this.disabled = true;
       var fout = await bewaarConcept(c, echteRegels);
       this.textContent = "Offerte opslaan"; this.disabled = false;
-      if(fout){ await fwMelding("Opslaan mislukt: " + fout); return; }
+      if(fout){ if(fout!=="proefmodus") await fwMelding("Opslaan mislukt: " + fout); return; }
       document.getElementById('f-status').textContent = "Offerte opgeslagen ✓";
       setTimeout(function(){ var el=document.getElementById('f-status'); if(el) el.textContent=""; }, 2500);
     };
@@ -2925,7 +2963,7 @@
       // Eerst het concept opslaan, dan het voorbeeld tonen
       var fout = await bewaarConcept(c, echteRegels);
       this.textContent = "Voorbeeld & definitief maken"; this.disabled = false;
-      if(fout){ await fwMelding("Opslaan mislukt: " + fout); return; }
+      if(fout){ if(fout!=="proefmodus") await fwMelding("Opslaan mislukt: " + fout); return; }
       await toonFactuurVoorbeeld(c);
     };
   }
@@ -3100,6 +3138,7 @@
 
   // Concept (factuur + regels) naar de database schrijven. Geeft null bij succes.
   async function bewaarConcept(c, regels){
+    if(!(await magBewaren())) return "proefmodus";
     var t = factuurTotalen({ regels:regels, korting_pct:c.korting_pct });
     // Representatief btw-tarief voor de kop: het hoogste dat op de factuur voorkomt
     var tarieven = Object.keys(t.perTarief).map(Number);
