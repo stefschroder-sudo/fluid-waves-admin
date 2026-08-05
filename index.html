@@ -75,7 +75,12 @@
     <label style="display:block; font-size:11px; color:var(--grijs); margin-bottom:3px;">E-mailadres</label>
     <input id="fw-email" type="email" autocomplete="username" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; margin-bottom:11px; background:var(--wit);">
     <label style="display:block; font-size:11px; color:var(--grijs); margin-bottom:3px;">Wachtwoord</label>
-    <input id="fw-pass" type="password" autocomplete="current-password" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; margin-bottom:6px; background:var(--wit);">
+    <div style="position:relative; margin-bottom:6px;">
+      <input id="fw-pass" type="password" autocomplete="current-password" style="width:100%; padding:9px 40px 9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; background:var(--wit);">
+      <button type="button" id="fw-pass-oog" aria-label="Toon wachtwoord" title="Toon wachtwoord" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; padding:5px; cursor:pointer; color:var(--grijs); display:flex; align-items:center;">
+        <svg id="fw-oog-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:17px; height:17px;"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
     <!-- Wachtwoord-hint: alleen bij aanmelden -->
     <div id="fw-pass-hint" style="display:none; font-size:10.5px; color:var(--grijs); margin-bottom:8px;">Minimaal 8 tekens.</div>
     <div style="height:8px;"></div>
@@ -117,6 +122,10 @@
       <div style="display:flex; align-items:center; gap:8px;">
         <div id="fw-user-ini" style="width:30px; height:30px; border-radius:50%; background:var(--goud); color:var(--navy); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">·</div>
         <span id="fw-user-naam" style="font-size:12.5px; color:#FFFFFF;"></span>
+        <button id="fw-uitlog" title="Uitloggen" style="display:flex; align-items:center; gap:5px; margin-left:4px; background:transparent; border:1px solid rgba(255,255,255,.28); border-radius:8px; color:#FFFFFF; font-size:11.5px; padding:6px 10px; cursor:pointer; font-family:inherit;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+          Uitloggen
+        </button>
       </div>
     </div>
   </div>
@@ -467,6 +476,42 @@
   loginBtn.onclick = verwerkKnop;
   document.getElementById('fw-pass').addEventListener('keydown', function(e){ if(e.key==="Enter") verwerkKnop(); });
   document.getElementById('fw-email').addEventListener('keydown', function(e){ if(e.key==="Enter") verwerkKnop(); });
+
+  // ── Uitloggen ─────────────────────────────────────────────────────────────
+  async function uitloggen(){
+    var zeker = await fwBevestig("Wil je uitloggen?", { okLabel:"Uitloggen", annuleerLabel:"Blijf ingelogd" });
+    if(!zeker) return;
+    try { await sb.auth.signOut(); } catch(e){}
+    // Alle sessiegegevens in het geheugen wissen, zodat er niets achterblijft.
+    user = null; ACCESS_TOKEN = null; admins = {}; curAdmin = null;
+    // Terug naar het inlogscherm.
+    root.style.display = "none";
+    loginEl.style.display = "flex";
+    if(typeof zetModus === "function") zetModus("inloggen");
+    document.getElementById('fw-pass').value = "";
+    var naamV = document.getElementById('fw-naam'); if(naamV) naamV.value = "";
+    loginFout.style.display = "none";
+  }
+  var uitlogBtn = document.getElementById('fw-uitlog');
+  if(uitlogBtn) uitlogBtn.onclick = uitloggen;
+
+  // ── Wachtwoord tonen/verbergen (oogje) ────────────────────────────────────
+  (function(){
+    var oog = document.getElementById('fw-pass-oog');
+    var veld = document.getElementById('fw-pass');
+    var svg = document.getElementById('fw-oog-svg');
+    if(!oog || !veld || !svg) return;
+    var oogOpen  = '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>';
+    var oogDicht = '<path d="M3 3l18 18"/><path d="M10.6 5.1A9.8 9.8 0 0 1 12 5c6.5 0 10 7 10 7a13.2 13.2 0 0 1-2.2 2.9M6.6 6.6A13.3 13.3 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 3.4-.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>';
+    oog.onclick = function(){
+      var tonen = veld.type === "password";
+      veld.type = tonen ? "text" : "password";
+      svg.innerHTML = tonen ? oogDicht : oogOpen;
+      oog.setAttribute('aria-label', tonen ? "Verberg wachtwoord" : "Toon wachtwoord");
+      oog.setAttribute('title', tonen ? "Verberg wachtwoord" : "Toon wachtwoord");
+      veld.focus();
+    };
+  })();
 
   async function naBinnenkomst(){
     loginEl.style.display = "none";
