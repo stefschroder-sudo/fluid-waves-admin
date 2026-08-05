@@ -2444,7 +2444,8 @@
     banner.innerHTML =
       '<b>Offertes en facturen.</b> Stel hier je bedrijfsgegevens en klanten in, en maak een offerte op met werkuren, reiskosten en overige declaraties. '+
       'Je stuurt de offerte naar je klant en kunt hem rustig aanpassen. Zodra de klant akkoord geeft, zet je de offerte om naar een factuur: die wordt dan '+
-      '<b>direct als omzet in je administratie opgenomen</b> en krijgt zijn factuurnummer.'+
+      '<b>direct als omzet in je administratie opgenomen</b> en krijgt zijn factuurnummer. '+
+      'Je kunt van de offerte, door hem op te slaan en goed te keuren, ook direct een factuur maken en naar je klant sturen. Deze omzet wordt dan direct geboekt.'+
       '<button id="fu-sluit" title="Sluiten" style="position:absolute; top:8px; right:8px; background:none; border:none; color:var(--goud); cursor:pointer; padding:4px; display:flex;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="font-size:15px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>';
     schermEl.insertBefore(banner, schermEl.firstChild);
     document.getElementById('fu-sluit').onclick = function(){ factuurUitlegWeg = true; banner.remove(); };
@@ -2794,6 +2795,9 @@
 
         '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:14px;">'+
           '<div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:2px;">Reiskosten</div>'+
+          '<div style="font-size:10.5px; color:var(--goud-deep, #7C6212); background:#FBF6E6; border:1px solid var(--goud); border-radius:7px; padding:7px 10px; margin:4px 0 8px; line-height:1.45;">'+
+            'Let op: doorbelaste reiskosten volgen meestal het btw-tarief van je dienst (vaak 21%), niet automatisch 0%. Controleer het juiste tarief voor jouw situatie.'+
+          '</div>'+
           '<div style="display:flex; gap:8px; font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--grijs); padding-bottom:2px;">'+
             '<span style="flex:1;">Omschrijving</span><span style="width:66px; text-align:right;">Aantal</span><span style="width:78px; text-align:right;">Tarief</span><span style="width:64px; text-align:center;">Btw</span><span style="width:82px; text-align:right;">Totaal</span><span style="width:19px;"></span>'+
           '</div>'+
