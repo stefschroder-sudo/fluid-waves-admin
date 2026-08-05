@@ -67,13 +67,25 @@
         <div style="font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--goud); font-weight:700;">by Fluid Waves · The Clever App Factory</div>
       </div>
     </div>
+    <!-- Naam-veld: alleen zichtbaar bij aanmelden -->
+    <div id="fw-naam-rij" style="display:none;">
+      <label style="display:block; font-size:11px; color:var(--grijs); margin-bottom:3px;">Naam van je onderneming</label>
+      <input id="fw-naam" type="text" autocomplete="organization" placeholder="Bijv. Jansen Consultancy" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; margin-bottom:11px; background:var(--wit);">
+    </div>
     <label style="display:block; font-size:11px; color:var(--grijs); margin-bottom:3px;">E-mailadres</label>
     <input id="fw-email" type="email" autocomplete="username" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; margin-bottom:11px; background:var(--wit);">
     <label style="display:block; font-size:11px; color:var(--grijs); margin-bottom:3px;">Wachtwoord</label>
-    <input id="fw-pass" type="password" autocomplete="current-password" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; margin-bottom:14px; background:var(--wit);">
+    <input id="fw-pass" type="password" autocomplete="current-password" style="width:100%; padding:9px 11px; border:1px solid var(--rand); border-radius:8px; font-size:13px; margin-bottom:6px; background:var(--wit);">
+    <!-- Wachtwoord-hint: alleen bij aanmelden -->
+    <div id="fw-pass-hint" style="display:none; font-size:10.5px; color:var(--grijs); margin-bottom:8px;">Minimaal 8 tekens.</div>
+    <div style="height:8px;"></div>
     <button id="fw-login-btn" style="width:100%; padding:10px; background:var(--navy); color:var(--papier); border:1px solid var(--navy); border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">Inloggen</button>
     <div id="fw-login-fout" style="display:none; margin-top:11px; font-size:11.5px; color:var(--rood); text-align:center;"></div>
-    <div style="margin-top:14px; font-size:10.5px; color:var(--grijs); text-align:center;"></div>
+    <!-- Schakelaar tussen inloggen en aanmelden -->
+    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--rand-licht); font-size:12px; color:var(--grijs); text-align:center;">
+      <span id="fw-schakel-tekst">Nog geen account?</span>
+      <button id="fw-schakel" style="background:none; border:none; color:var(--navy); font-weight:700; font-size:12px; cursor:pointer; padding:0 0 0 4px; font-family:inherit;">Account aanmaken</button>
+    </div>
   </div>
 </div>
 
@@ -371,8 +383,90 @@
     if(!user || !ACCESS_TOKEN){ toonFout("Sessie niet geladen — probeer opnieuw."); return; }
     await naBinnenkomst();
   }
-  loginBtn.onclick = login;
-  document.getElementById('fw-pass').addEventListener('keydown', function(e){ if(e.key==="Enter") login(); });
+  // ── Schakelen tussen "inloggen" en "aanmelden" ───────────────────────────
+  var modus = "inloggen"; // of "aanmelden"
+  var naamRij   = document.getElementById('fw-naam-rij');
+  var passHint  = document.getElementById('fw-pass-hint');
+  var schakel   = document.getElementById('fw-schakel');
+  var schakelTxt= document.getElementById('fw-schakel-tekst');
+
+  function zetModus(m){
+    modus = m;
+    loginFout.style.display = "none";
+    if(m === "aanmelden"){
+      naamRij.style.display   = "";
+      passHint.style.display  = "";
+      loginBtn.textContent    = "Account aanmaken";
+      schakelTxt.textContent  = "Heb je al een account?";
+      schakel.textContent     = "Inloggen";
+      document.getElementById('fw-pass').setAttribute('autocomplete','new-password');
+    } else {
+      naamRij.style.display   = "none";
+      passHint.style.display  = "none";
+      loginBtn.textContent    = "Inloggen";
+      schakelTxt.textContent  = "Nog geen account?";
+      schakel.textContent     = "Account aanmaken";
+      document.getElementById('fw-pass').setAttribute('autocomplete','current-password');
+    }
+  }
+  schakel.onclick = function(){ zetModus(modus === "inloggen" ? "aanmelden" : "inloggen"); };
+
+  // ── Aanmelden: account maken, meteen inloggen, lege administratie geven ───
+  async function registreer(){
+    var naam  = document.getElementById('fw-naam').value.trim();
+    var email = document.getElementById('fw-email').value.trim();
+    var pass  = document.getElementById('fw-pass').value;
+    if(!naam){  toonFout("Vul de naam van je onderneming in."); return; }
+    if(!email){ toonFout("Vul je e-mailadres in."); return; }
+    if(pass.length < 8){ toonFout("Kies een wachtwoord van minimaal 8 tekens."); return; }
+
+    loginBtn.textContent = "Bezig…"; loginBtn.disabled = true;
+    var r = await sb.auth.signUp({ email: email, password: pass });
+    if(r.error){
+      loginBtn.textContent = "Account aanmaken"; loginBtn.disabled = false;
+      // vriendelijker bericht bij een al bestaand account
+      var m = r.error.message || "";
+      if(/registered|exists|already/i.test(m)){
+        toonFout("Er bestaat al een account met dit e-mailadres. Log in.");
+      } else {
+        toonFout("Aanmelden mislukt: " + m);
+      }
+      return;
+    }
+
+    // Bij "meteen inloggen" (geen e-mailbevestiging) geeft signUp al een sessie.
+    // Voor de zekerheid vallen we terug op signInWithPassword als die er niet is.
+    var sessie = r.data ? r.data.session : null;
+    var gebruiker = r.data ? r.data.user : null;
+    if(!sessie){
+      var ri = await sb.auth.signInWithPassword({ email: email, password: pass });
+      if(ri.error){
+        loginBtn.textContent = "Account aanmaken"; loginBtn.disabled = false;
+        toonFout("Account gemaakt, maar inloggen lukte niet: " + ri.error.message);
+        return;
+      }
+      sessie = ri.data.session; gebruiker = ri.data.user;
+    }
+
+    user = gebruiker;
+    ACCESS_TOKEN = sessie ? sessie.access_token : null;
+    loginBtn.textContent = "Account aanmaken"; loginBtn.disabled = false;
+    if(!user || !ACCESS_TOKEN){ toonFout("Sessie niet geladen — probeer opnieuw."); return; }
+
+    // Eerste, lege administratie aanmaken met de opgegeven bedrijfsnaam,
+    // zodat de nieuwe klant meteen een werkende administratie heeft.
+    admins = {};
+    var ok = await nieuweAdmin(naam);
+    if(!ok){ toonFout("Account gemaakt, maar de administratie kon niet worden aangemaakt."); return; }
+
+    await naBinnenkomst();
+  }
+
+  // De knop doet inloggen óf aanmelden, afhankelijk van de modus.
+  function verwerkKnop(){ if(modus === "aanmelden") registreer(); else login(); }
+  loginBtn.onclick = verwerkKnop;
+  document.getElementById('fw-pass').addEventListener('keydown', function(e){ if(e.key==="Enter") verwerkKnop(); });
+  document.getElementById('fw-email').addEventListener('keydown', function(e){ if(e.key==="Enter") verwerkKnop(); });
 
   async function naBinnenkomst(){
     loginEl.style.display = "none";
