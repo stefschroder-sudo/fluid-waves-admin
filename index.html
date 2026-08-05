@@ -122,6 +122,10 @@
       <div style="display:flex; align-items:center; gap:8px;">
         <div id="fw-user-ini" style="width:30px; height:30px; border-radius:50%; background:var(--goud); color:var(--navy); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">·</div>
         <span id="fw-user-naam" style="font-size:12.5px; color:#FFFFFF;"></span>
+        <button id="fw-abo" title="Je abonnement inzien en beheren" style="display:flex; align-items:center; gap:5px; margin-left:4px; background:transparent; border:1px solid rgba(255,255,255,.28); border-radius:8px; color:#FFFFFF; font-size:11.5px; padding:6px 10px; cursor:pointer; font-family:inherit;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px;"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg>
+          Abonnement
+        </button>
         <button id="fw-uitlog" title="Uitloggen" style="display:flex; align-items:center; gap:5px; margin-left:4px; background:transparent; border:1px solid rgba(255,255,255,.28); border-radius:8px; color:#FFFFFF; font-size:11.5px; padding:6px 10px; cursor:pointer; font-family:inherit;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
           Uitloggen
@@ -494,6 +498,8 @@
   }
   var uitlogBtn = document.getElementById('fw-uitlog');
   if(uitlogBtn) uitlogBtn.onclick = uitloggen;
+  var aboBtn = document.getElementById('fw-abo');
+  if(aboBtn) aboBtn.onclick = function(){ toonAbonnement(); };
 
   // ── Wachtwoord tonen/verbergen (oogje) ────────────────────────────────────
   (function(){
@@ -1418,14 +1424,118 @@
   // Reset de cache na een succesvolle betaling/abonnement (later aan te roepen).
   function resetToegangCache(){ _toegangCache = null; }
 
+  // \u2500\u2500 Abonneren en abonnementsbeheer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // E\u00E9n abonnement: \u20AC19,95/mnd ex btw, nieuwe abonnees betalen de eerste
+  // 2 maanden \u20AC10/mnd (introductiekorting via een Stripe-coupon, geregeld
+  // door /api/start-checkout). Maandelijks opzegbaar.
+  var ABO_TIER = "smart-admin-vast";
+  var ABO_PRIJS_TEKST =
+    "Smart Admin kost \u20AC19,95 per maand (ex btw).\n" +
+    "Nieuwe abonnees betalen de eerste 2 maanden \u20AC10 per maand (ex btw).\n" +
+    "Maandelijks opzegbaar; opzeggen kan hier in de app.";
+
+  // Start de Stripe-checkout voor de ingelogde gebruiker.
+  async function startAbonnement(){
+    if(!user || !user.id){ await fwMelding("Log eerst in om te kunnen abonneren."); return; }
+    try {
+      var res = await fetch("/api/start-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier_id: ABO_TIER,
+          gebruiker: user.id,
+          email: user.email || null,
+          terug_url: location.origin + location.pathname
+        })
+      });
+      var d = await res.json().catch(function(){ return {}; });
+      if(!res.ok || !d.url){
+        await fwMelding("De betaalpagina kon niet worden geopend: " + (d.error || res.status) + ". Probeer het later opnieuw.");
+        return;
+      }
+      location.href = d.url;   // naar Stripe Checkout
+    } catch(e){
+      await fwMelding("Verbinding met de betaalservice mislukt: " + (e.message || e));
+    }
+  }
+
+  // Koopdialoog: uitleg + \u00E9\u00E9n abonneer-knop.
+  async function koopDialoog(inleiding){
+    var keuze = await fwKeuze(
+      (inleiding ? inleiding + "\n\n" : "") + ABO_PRIJS_TEKST,
+      "Abonneer op Smart Admin",
+      [{ label: "Abonneer \u2014 eerste 2 maanden \u20AC10/mnd, daarna \u20AC19,95/mnd (ex btw)", waarde: "abo" }]
+    );
+    if(keuze === "abo") await startAbonnement();
+  }
+
+  // Knop "Abonnement" in de bovenbalk: status tonen, of abonneren/opzeggen.
+  async function toonAbonnement(){
+    var d = null;
+    try {
+      var r = await dbClient().rpc('mijn_toegang', { p_app_id: 'smart-admin' });
+      d = (!r.error && r.data) ? r.data : null;
+    } catch(e){}
+    if(!d || d.toegang !== true){
+      await koopDialoog("Je hebt nog geen lopend abonnement.");
+      return;
+    }
+    var tot = d.periode_eind ? new Date(d.periode_eind).toLocaleDateString('nl-NL', {day:'2-digit', month:'long', year:'numeric'}) : "\u2014";
+    var regels = "Abonnement: " + (d.tier || "\u2014") +
+                 "\nStatus: " + (d.status || "\u2014") +
+                 "\nHuidige periode loopt tot: " + tot +
+                 "\nPrijs: \u20AC19,95 per maand (ex btw)";
+    if(d.opgezegd){
+      await fwMelding(regels + "\n\nJe abonnement is opgezegd en stopt aan het einde van de betaalde periode.", "Je abonnement");
+      return;
+    }
+    var keuze = await fwKeuze(regels, "Je abonnement",
+      [{ label: "Abonnement opzeggen (stopt op " + tot + ")", waarde: "opzeggen", gevaar: true }]);
+    if(keuze !== "opzeggen") return;
+    var zeker = await fwBevestig(
+      "Weet je het zeker? Je abonnement loopt dan nog tot " + tot + " en stopt daarna.\nJe gegevens blijven bewaard; bewaren van nieuwe gegevens kan daarna niet meer.",
+      { titel: "Abonnement opzeggen", okLabel: "Ja, opzeggen", annuleerLabel: "Toch niet" });
+    if(!zeker) return;
+    try {
+      var res = await fetch("/api/zeg-op", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken: ACCESS_TOKEN })
+      });
+      var uit = await res.json().catch(function(){ return {}; });
+      if(!res.ok || uit.ok !== true){
+        await fwMelding("Opzeggen is niet gelukt: " + (uit.error || res.status) + ". Probeer het later opnieuw of mail ons.");
+        return;
+      }
+      resetToegangCache();
+      await fwMelding("Je abonnement is opgezegd en loopt nog tot " + tot + ".", "Opgezegd");
+    } catch(e){
+      await fwMelding("Opzeggen is niet gelukt: " + (e.message || e));
+    }
+  }
+
+  // Terugkeer van Stripe (?betaald=1 of ?betaald=0).
+  (function(){
+    try {
+      var qs = new URLSearchParams(location.search);
+      if(!qs.has('betaald')) return;
+      var gelukt = qs.get('betaald') === '1';
+      history.replaceState({}, '', location.pathname);
+      resetToegangCache();
+      setTimeout(function(){
+        fwMelding(gelukt
+          ? "Betaling gelukt \u2014 je abonnement is actief!\nDe eerste 2 maanden betaal je \u20AC10 per maand, daarna \u20AC19,95 per maand (ex btw).\nJe kunt nu alles bewaren."
+          : "De betaling is niet afgerond. Er is niets afgeschreven.\nJe kunt het opnieuw proberen via de knop Abonnement bovenin.",
+          gelukt ? "Welkom bij Smart Admin" : "Betaling geannuleerd");
+      }, 400);
+    } catch(e){}
+  })();
+
   async function magBewaren(){
     if(await heeftAbonnement()) return true;
-    // Geen abonnement: waarschuwen en naar de etalage/abonnement verwijzen.
-    await fwMelding(
-      "In de proefmodus kun je alles invullen en bekijken, maar om je gegevens te bewaren sluit je een abonnement af.\n\n" +
-      "Ga naar Fluid Waves om Smart Admin te activeren (Try-out \u20AC10 of Vast \u20AC19,95 per maand).",
-      "Abonnement nodig om te bewaren"
-    );
+    // Geen abonnement: direct hier kunnen abonneren, zonder omweg.
+    await koopDialoog(
+      "In de proefmodus kun je alles invullen en bekijken, maar om je gegevens te bewaren sluit je een abonnement af.");
     return false;
   }
 
