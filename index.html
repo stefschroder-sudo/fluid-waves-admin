@@ -518,9 +518,29 @@
     root.style.display = "";
     toonGebruiker();
     await laadAdmins();
+    await zorgVoorPlatformKlant();
     applyAdmin(); renderNav(); await renderScherm();
     var a = admins[curAdmin];
     if(!a || !a.welkom_verbergen){ toonWelkom(); }
+  }
+
+  // ── Platform-klant: koppel de ingelogde gebruiker aan platform.klanten ────
+  // Idempotent: bestaat de klant al, dan gebeurt er niets. De database-functie
+  // haalt zelf auth.uid() op, dus er hoeft geen app-sleutel naar de frontend.
+  async function zorgVoorPlatformKlant(){
+    try {
+      var naam = "";
+      // naam uit de eerste (of huidige) administratie, als die al geladen is
+      if(curAdmin && admins[curAdmin]) naam = admins[curAdmin].naam || "";
+      var email = (user && user.email) ? user.email : null;
+      var r = await dbClient().rpc('zorg_voor_klant_app', {
+        p_app_id: 'smart-admin',
+        p_naam:   naam || null,
+        p_email:  email,
+        p_bedrijf: naam || null
+      });
+      if(r.error){ console.warn('zorg_voor_klant_app:', r.error.message); }
+    } catch(e){ console.warn('zorg_voor_klant_app faalde:', e); }
   }
 
   function toonWelkom(){
