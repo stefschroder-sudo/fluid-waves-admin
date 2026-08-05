@@ -144,7 +144,7 @@
     <div class="fw-top" data-view="resultaat" data-tip="Jouw Winst- en Verliesrekening" style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M4 19h16M4 15l4-6 4 3 4-8"/></svg>6. Resultaat</div>
     <div class="fw-top" data-view="balans" data-tip="Stel samen met je boekhouder of accountant definitief jouw kloppende balans op" style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 3v18M7 21h10M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0zM3 7h18"/></svg>7. Balans</div>
     <div class="fw-top" data-view="ib" data-tip="Stuur deze gegevens naar jouw belastingadviseur om de IB aan te kunnen geven" style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>8. IB-aangifte</div>
-    <div class="fw-top" data-view="disclaimer" data-tip="De eigenaar van deze administratie is zelf verantwoordelijk voor de inhoud en uitvoering. Klik voor de volledige disclaimer." style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>9. Disclaimer</div>
+    <div class="fw-top" data-view="disclaimer" data-tip="Algemene voorwaarden en privacy. U bent zelf verantwoordelijk voor de inhoud van uw administratie; de aanbieder heeft daar geen inzage in. Klik voor de volledige voorwaarden." style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>9. Voorwaarden</div>
   </div>
 
   <div style="display:flex;">
@@ -571,7 +571,7 @@
       ]
     },
     disclaimer: {
-      titel:"Disclaimer", actie:null,
+      titel:"Voorwaarden & privacy", actie:null,
       items:[
         {id:"tekst", icon:"file-text", label:"Voorwaarden", groep:"Informatie"}
       ]
@@ -3862,21 +3862,62 @@
   }
 
   async function schermDisclaimer(){
+    // Volledige algemene voorwaarden + privacyverklaring voor Smart Admin.
+    // CONCEPT — laat dit vóór livegang toetsen door een jurist (AVG,
+    // verwerkersrol, aansprakelijkheid).
+    var art = function(nr, titel, body){
+      return '<div style="margin:0 0 18px;">'+
+        '<div style="font-size:13px; font-weight:800; color:var(--navy); margin-bottom:5px;">'+nr+'. '+titel+'</div>'+
+        '<div style="font-size:12.5px; color:var(--inkt); line-height:1.7;">'+body+'</div>'+
+      '</div>';
+    };
     schermEl.innerHTML =
-      '<div style="max-width:720px;">'+
-        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:26px 28px;">'+
-          '<div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">'+
+      '<div style="max-width:760px;">'+
+        '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:28px 30px;">'+
+          '<div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">'+
             '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--goud)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px;"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>'+
-            '<h2 style="font-size:18px; font-weight:800; color:var(--navy); margin:0;">Disclaimer</h2>'+
+            '<h2 style="font-size:18px; font-weight:800; color:var(--navy); margin:0;">Algemene voorwaarden &amp; privacy</h2>'+
           '</div>'+
-          '<div style="font-size:13px; color:var(--inkt); line-height:1.7;">'+
-            '<p style="margin:0 0 14px;">Deze administratietool is een <b>hulpmiddel</b>. De eigenaar van deze administratie is zelf volledig verantwoordelijk voor de juistheid, volledigheid en uitvoering van de gehele administratie, en voor het tijdig en correct indienen van aangiften.</p>'+
-            '<p style="margin:0 0 14px;">Berekeningen, overzichten en voorbereidingen (waaronder de btw-aangifte, het resultaat, de balans en de IB-aangifte) zijn bedoeld ter ondersteuning en dienen te worden gecontroleerd door een boekhouder, accountant of belastingadviseur voordat er beslissingen op worden gebaseerd of aangiften worden ingediend.</p>'+
-            '<p style="margin:0 0 14px;">De informatie over belastingregels wordt met behulp van AI verzameld, wordt <b>niet</b> automatisch in de administratie verwerkt en dient uitsluitend ter algemene informatie.</p>'+
-            '<p style="margin:0;">De uitgever van deze tool aanvaardt, voor zover wettelijk toegestaan, <b>geen aansprakelijkheid</b> voor gevolgen, schade of uitkomsten voortvloeiend uit het gebruik van deze administratie.</p>'+
+          '<div style="font-size:11px; color:var(--grijs); margin-bottom:20px;">Smart Admin — een dienst van Schröder Consult · Laatst bijgewerkt: augustus 2026</div>'+
+
+          art('1', 'Wie de dienst levert',
+            'Smart Admin wordt aangeboden door <b>Schröder Consult</b> (KvK 87125897), gevestigd te Wassenaar, hierna &ldquo;de aanbieder&rdquo;. Smart Admin is een online administratietool waarmee u &mdash; de ondernemer of zzp&rsquo;er die een account aanmaakt, hierna &ldquo;de gebruiker&rdquo; &mdash; uw eigen bedrijfsadministratie voert.')+
+
+          art('2', 'Uw administratie is van u',
+            'Bij het aanmaken van een account krijgt u een <b>lege, eigen administratie</b>. De gegevens die u invoert &mdash; facturen, boekingen, klanten en alle overige gegevens &mdash; zijn en blijven van u. Iedere administratie is technisch van andere administraties afgeschermd: u ziet uitsluitend uw eigen gegevens, en andere gebruikers zien die van hen. Deze scheiding wordt op databaseniveau afgedwongen.')+
+
+          art('3', 'De aanbieder heeft geen inzage in uw administratie',
+            'De aanbieder heeft <b>geen toegang tot de inhoud</b> van uw administratie. Uw facturen, boekingen, klantgegevens en bedragen zijn voor de aanbieder niet inzichtelijk. De afscherming geldt ook voor de aanbieder zelf. De aanbieder verwerkt uitsluitend de gegevens die nodig zijn om de dienst te leveren en te factureren, zoals beschreven in artikel 4.')+
+
+          art('4', 'Welke gegevens de aanbieder wél verwerkt',
+            'Om de dienst te leveren verwerkt de aanbieder: (a) uw <b>accountgegevens</b> (e-mailadres en inloggegevens) voor toegang en beveiliging; en (b) <b>gebruiks- en verbruiksgegevens</b> &mdash; het aantal bewerkingen en de bijbehorende technische kosten (waaronder AI-verwerkingen) &mdash; die nodig zijn voor de facturering en voor het bewaken van de dienst. Deze verbruiksgegevens bevatten <b>niet</b> de inhoud van uw administratie. De aanbieder verkoopt uw gegevens niet en deelt ze niet met derden voor commerciële doeleinden.')+
+
+          art('5', 'Verwerkersrol (AVG)',
+            'Ten aanzien van de gegevens in uw administratie treedt de aanbieder op als <b>verwerker</b> en bent u de <b>verwerkingsverantwoordelijke</b>. U bepaalt welke gegevens u invoert en met welk doel; de aanbieder verwerkt deze uitsluitend in uw opdracht, om de dienst te leveren. U bent zelf verantwoordelijk voor de juistheid en rechtmatigheid van de gegevens die u invoert, en voor het naleven van uw eigen verplichtingen onder de AVG jegens bijvoorbeeld uw klanten.')+
+
+          art('6', 'Gebruik van AI',
+            'Smart Admin gebruikt kunstmatige intelligentie (AI) als hulpmiddel, bijvoorbeeld bij het verwerken van factuurgegevens en het informeren over belastingregels. Daarbij kunnen gegevens die u invoert worden voorgelegd aan een externe AI-dienst (Anthropic) om die verwerking uit te voeren. Deze verwerking gebeurt om de door u gevraagde functie te leveren. AI-uitkomsten zijn <b>ondersteunend</b> en worden nooit automatisch als definitief in uw administratie vastgelegd zonder uw bevestiging. De aanbieder is niet aansprakelijk voor onjuistheden in AI-uitkomsten; controleer deze altijd zelf.')+
+
+          art('7', 'De tool is een hulpmiddel',
+            'Smart Admin is een <b>hulpmiddel</b>. U bent zelf volledig verantwoordelijk voor de juistheid, volledigheid en uitvoering van uw administratie, en voor het tijdig en correct indienen van aangiften. Berekeningen en overzichten (waaronder btw, resultaat, balans en IB) zijn bedoeld ter ondersteuning en dienen te worden gecontroleerd door een boekhouder, accountant of belastingadviseur voordat u er beslissingen op baseert of aangiften op indient. Informatie over belastingregels dient uitsluitend ter algemene informatie.')+
+
+          art('8', 'Abonnement, prijs en opzegging',
+            'Smart Admin wordt aangeboden op basis van een <b>maandabonnement</b>. De actuele tarieven staan vermeld op de website. Het abonnement wordt maandelijks vooraf gefactureerd en is <b>maandelijks opzegbaar</b>. Bij opzegging blijft de toegang bestaan tot het einde van de betaalde periode. De aanbieder kan de tarieven wijzigen; wijzigingen worden vooraf aangekondigd en gaan pas in bij een volgende periode.')+
+
+          art('9', 'Beschikbaarheid en bewaring',
+            'De aanbieder spant zich in voor een goede beschikbaarheid van de dienst, maar kan geen ononderbroken beschikbaarheid garanderen. U bent zelf verantwoordelijk voor het bewaren van kopieën of exports van uw gegevens waar u die nodig heeft, bijvoorbeeld voor de wettelijke bewaarplicht. Na beëindiging van uw abonnement kunnen uw gegevens na een redelijke termijn worden verwijderd; zorg dat u tijdig een export maakt.')+
+
+          art('10', 'Aansprakelijkheid',
+            'Voor zover wettelijk toegestaan aanvaardt de aanbieder <b>geen aansprakelijkheid</b> voor gevolgen, schade of uitkomsten voortvloeiend uit het gebruik van Smart Admin, waaronder gemiste of onjuiste aangiften, verlies van gegevens, of beslissingen genomen op basis van berekeningen of AI-uitkomsten. Niets in deze voorwaarden sluit aansprakelijkheid uit die op grond van dwingend recht niet kan worden uitgesloten.')+
+
+          art('11', 'Wijziging van deze voorwaarden',
+            'De aanbieder kan deze voorwaarden wijzigen. Bij belangrijke wijzigingen wordt u geïnformeerd. Door de dienst na een wijziging te blijven gebruiken, aanvaardt u de gewijzigde voorwaarden.')+
+
+          '<div style="font-size:11px; color:var(--grijs); border-top:1px solid var(--rand-licht); padding-top:14px; margin-top:6px; line-height:1.6;">'+
+            'Vragen over uw gegevens of deze voorwaarden? Neem contact op met Schröder Consult. '+
+            'Door Smart Admin te gebruiken, gaat u akkoord met deze voorwaarden.'+
           '</div>'+
         '</div>'+
-        '<div style="font-size:10.5px; color:var(--grijs); margin-top:14px; line-height:1.5;">Door deze administratietool te gebruiken, gaat u akkoord met bovenstaande voorwaarden.</div>'+
       '</div>';
   }
 
