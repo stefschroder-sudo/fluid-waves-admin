@@ -121,7 +121,6 @@
       <select id="fw-periode-keuze" style="border:1px solid rgba(255,255,255,.28); border-radius:8px; background:var(--navy); font-size:11.5px; padding:6px 8px; color:#FFFFFF;"></select>
       <div style="display:flex; align-items:center; gap:8px;">
         <div id="fw-user-ini" style="width:30px; height:30px; border-radius:50%; background:var(--goud); color:var(--navy); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">·</div>
-        <span id="fw-user-naam" style="font-size:12.5px; color:#FFFFFF;"></span>
         <button id="fw-abo" title="Je abonnement inzien en beheren" style="display:flex; align-items:center; gap:5px; margin-left:4px; background:transparent; border:1px solid rgba(255,255,255,.28); border-radius:8px; color:#FFFFFF; font-size:11.5px; padding:6px 10px; cursor:pointer; font-family:inherit;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px;"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg>
           Abonnement
@@ -1484,7 +1483,7 @@
     var regels = "Abonnement: " + (d.tier || "\u2014") +
                  "\nStatus: " + (d.status || "\u2014") +
                  "\nHuidige periode loopt tot: " + tot +
-                 "\nPrijs: \u20AC19,95 per maand (ex btw)";
+                 "\nPrijs: eerste 2 maanden \u20AC10 per maand, daarna \u20AC19,95 per maand (ex btw)";
     if(d.opgezegd){
       await fwMelding(regels + "\n\nJe abonnement is opgezegd en stopt aan het einde van de betaalde periode.", "Je abonnement");
       return;
