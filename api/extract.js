@@ -24,7 +24,15 @@ export default async function handler(req, res) {
     }
 
     const partij = (soort === "omzet") ? "klant (afnemer)" : "leverancier";
-    const prompt =
+    const bankPrompt =
+      "Je krijgt een bankjaaroverzicht. Zoek het saldo per 31 december (eindsaldo) van " +
+      "alle betaal- en spaarrekeningen die erin staan, en tel die eindsaldi bij elkaar op. " +
+      "Antwoord UITSLUITEND met een JSON-object, zonder uitleg, zonder markdown, zonder ```-tekens. " +
+      'Gebruik exact deze velden:\n{"banksaldo":getal,"datum":"YYYY-MM-DD"}\n' +
+      "banksaldo is de som van alle eindsaldi per 31 december als getal met punt als decimaalteken, " +
+      "geen euroteken. datum is de peildatum (31 december van het overzichtsjaar). " +
+      "Verzin niets; als je het saldo niet zeker weet, gebruik null.";
+    const bonPrompt =
       "Je krijgt een factuur of bon. Haal de gegevens eruit en antwoord UITSLUITEND " +
       "met een JSON-object, zonder uitleg, zonder markdown, zonder ```-tekens. " +
       "Gebruik exact deze velden:\n" +
@@ -36,6 +44,7 @@ export default async function handler(req, res) {
       "Als het btw-percentage onduidelijk is, leid het af uit btw_bedrag/bedrag_excl " +
       "(meestal 21, soms 9 of 0). Als de datum ontbreekt, gebruik null. " +
       "Verzin niets; laat tekstvelden leeg als je het niet zeker weet.";
+    const prompt = (soort === "bank") ? bankPrompt : bonPrompt;
 
     // Bestand als document (pdf) of image (jpg/png) meesturen
     const isPdf = media_type === "application/pdf";
@@ -65,6 +74,11 @@ export default async function handler(req, res) {
     }
 
     const uit = await antwoord.json();
+    const verbruik = {
+      model: "claude-sonnet-4-5",
+      input_tokens: (uit.usage && uit.usage.input_tokens) || 0,
+      output_tokens: (uit.usage && uit.usage.output_tokens) || 0
+    };
     const tekst = (uit.content || [])
       .filter((b) => b.type === "text")
       .map((b) => b.text)
@@ -78,11 +92,11 @@ export default async function handler(req, res) {
     try {
       velden = JSON.parse(schoon);
     } catch (e) {
-      return res.status(200).json({ ok: false, ruwe_tekst: tekst,
+      return res.status(200).json({ ok: false, ruwe_tekst: tekst, verbruik: verbruik,
         error: "Kon het antwoord niet als JSON lezen" });
     }
 
-    return res.status(200).json({ ok: true, velden });
+    return res.status(200).json({ ok: true, velden, verbruik: verbruik });
   } catch (err) {
     return res.status(500).json({ error: "Onverwachte fout", detail: String(err).slice(0, 500) });
   }
