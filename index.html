@@ -793,8 +793,10 @@
       ]
     },
     invoeren: {
-      titel:"Invoeren", actie:"Nieuwe regel",
+      titel:"Invoeren", actie:"Nieuwe regel", standaardItem:"omzet",
       items:[
+        {id:"map-omzet",  icon:"inbox", label:"Map Omzet",  groep:"Verzamelmappen"},
+        {id:"map-kosten", icon:"inbox", label:"Map Kosten", groep:"Verzamelmappen"},
         {id:"omzet",  icon:"trending-up",  label:"Omzet",          groep:"Inkomsten"},
         {id:"inkoop", icon:"file-invoice", label:"Inkoopfacturen", groep:"Uitgaven"},
         {id:"kosten", icon:"cash",         label:"Kosten",         groep:"Uitgaven"},
@@ -1692,6 +1694,217 @@
     kosten: { titelEnk:"kostenregel",      partij:"Leverancier",partijPlaceholder:"Naam leverancier",lijstnaam:"Kosten", leegtekst:"Geen kosten",          factuurwoord:"bon of factuur" }
   };
 
+  // ── Verzamelmappen: bonnen en facturen verzamelen vóór het boeken ────────
+  // De gebruiker kiest de map (Omzet of Kosten) en gooit er alles in: upload,
+  // slepen (ook rechtstreeks uit een e-mail) of de camera. De AI-herkenning
+  // vult datum/bedrag/btw alvast in. Vanuit de map: verwijderen, of met één
+  // klik opnemen in de boekhouding.
+  async function schermVerzamelmap(soort){
+    var isOmzet = (soort === "omzet");
+    var mapNaam = isOmzet ? "Map Omzet" : "Map Kosten";
+
+    var q = await dbClient().schema('smart_admin').from('inbox')
+      .select('*')
+      .eq('administratie_id', curAdmin)
+      .eq('soort', soort)
+      .eq('status', 'nieuw')
+      .order('datum', { ascending: false });
+    if(q.error){ schermEl.innerHTML = '<div class="fw-leeg">Kon de map niet laden: '+q.error.message+'</div>'; return; }
+    var items = q.data || [];
+
+    var html =
+      '<div style="background:#FBF6E6; border:1px solid var(--goud); border-radius:10px; padding:12px 15px; margin-bottom:14px; font-size:12px; color:var(--navy); line-height:1.5;">'+
+        '<b>'+mapNaam+'.</b> Verzamel hier al je '+(isOmzet?'omzetbewijzen (facturen, betaalbewijzen)':'bonnen en inkoopfacturen')+' — upload, sleep ze hierheen (ook rechtstreeks uit je e-mail) of gebruik de camera. '+
+        'De gegevens worden automatisch gelezen. Daarna kies je per item: opnemen in de boekhouding of verwijderen.'+
+      '</div>'+
+      '<div id="vm-invoer" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">'+
+        '<div id="vm-drop" style="flex:1; min-width:260px; border:1.5px dashed var(--rand); border-radius:10px; padding:18px; text-align:center; cursor:pointer; background:var(--wit);">'+
+          '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:20px; color:var(--goud);"><path d="M12 15V3M8 7l4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'+
+          '<div id="vm-drop-tekst" style="font-size:12px; color:var(--grijs); margin-top:6px;">Sleep bestanden hierheen of klik om te kiezen (pdf, jpg, png)</div>'+
+          '<input id="vm-file" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style="display:none;">'+
+        '</div>'+
+        '<button id="vm-camera" style="min-width:150px; border:1.5px solid var(--navy); border-radius:10px; background:var(--wit); color:var(--navy); font-size:12.5px; font-weight:700; cursor:pointer; padding:14px 18px; display:flex; flex-direction:column; align-items:center; gap:6px;">'+
+          '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:20px;"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>'+
+          'Camera gebruiken'+
+          '<input id="vm-capture" type="file" accept="image/*" capture="environment" style="display:none;">'+
+        '</button>'+
+      '</div>'+
+      '<div id="vm-status" style="display:none; margin-bottom:12px; background:#FBF6E6; border:1px solid var(--goud); border-radius:8px; padding:8px 12px; font-size:12px; color:var(--navy);"></div>';
+
+    if(items.length){
+      html += '<div style="font-size:12px; font-weight:600; color:var(--navy); margin-bottom:8px;">'+items.length+' item'+(items.length!==1?'s':'')+' te verwerken · op datum</div>';
+      html += items.map(function(it){
+        var d = it.datum || '';
+        return '<div class="vm-item" data-id="'+it.id+'" style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:10px; padding:12px 14px; margin-bottom:10px;">'+
+          '<div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">'+
+            '<button class="vm-bekijk" data-pad="'+it.bestand_pad+'" title="Origineel bekijken" style="flex-shrink:0; width:52px; height:52px; border:1px solid var(--rand); border-radius:8px; background:var(--papier); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--navy);">'+
+              '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="font-size:20px;"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>'+
+            '</button>'+
+            '<div style="flex:1; min-width:230px;">'+
+              '<div style="font-size:11px; color:var(--grijs); margin-bottom:6px;">'+(it.bestand_naam||'bestand')+(it.herkend?' · automatisch gelezen — controleer':' · niet automatisch gelezen — vul zelf in')+'</div>'+
+              '<div style="display:flex; gap:6px; flex-wrap:wrap;">'+
+                '<input class="vm-datum" type="date" value="'+d+'" style="padding:6px 8px; border:1px solid var(--rand); border-radius:6px; font-size:12px; background:#fff;">'+
+                '<input class="vm-naam" type="text" placeholder="'+(isOmzet?'Klant':'Leverancier')+'" value="'+String(it.naam||'').replace(/"/g,'&quot;')+'" style="flex:1; min-width:110px; padding:6px 8px; border:1px solid var(--rand); border-radius:6px; font-size:12px; background:#fff;">'+
+                '<input class="vm-excl" type="number" step="0.01" placeholder="€ excl." value="'+(it.bedrag_excl!=null?it.bedrag_excl:'')+'" style="width:92px; padding:6px 8px; border:1px solid var(--rand); border-radius:6px; font-size:12px; background:#fff; text-align:right;">'+
+                '<select class="vm-btw" style="padding:6px 6px; border:1px solid var(--rand); border-radius:6px; font-size:12px; background:#fff;">'+
+                  [21,9,0].map(function(p){ return '<option value="'+p+'"'+((it.btw_pct==null?21:it.btw_pct)===p?' selected':'')+'>'+p+'%</option>'; }).join('')+
+                '</select>'+
+              '</div>'+
+              '<input class="vm-oms" type="text" placeholder="Omschrijving (optioneel)" value="'+String(it.omschrijving||'').replace(/"/g,'&quot;')+'" style="width:100%; margin-top:6px; padding:6px 8px; border:1px solid var(--rand); border-radius:6px; font-size:12px; background:#fff;">'+
+            '</div>'+
+            '<div style="display:flex; flex-direction:column; gap:6px;">'+
+              '<button class="vm-opnemen" style="background:var(--navy); color:var(--papier); border:none; border-radius:7px; font-size:12px; font-weight:700; padding:8px 14px; cursor:pointer; white-space:nowrap;">✓ Opnemen in boekhouding</button>'+
+              '<button class="vm-weg" style="background:transparent; color:var(--rood); border:1px solid var(--rood); border-radius:7px; font-size:12px; padding:7px 14px; cursor:pointer; white-space:nowrap;">Verwijderen</button>'+
+            '</div>'+
+          '</div>'+
+        '</div>';
+      }).join('');
+    } else {
+      html += '<div class="fw-leeg">De map is leeg. Alles wat je hier verzamelt, staat klaar tot jij het boekt.</div>';
+    }
+    schermEl.innerHTML = html;
+
+    var statusEl = document.getElementById('vm-status');
+    function toonStatus(t){ statusEl.style.display = t ? 'block' : 'none'; statusEl.textContent = t || ''; }
+
+    // ---- nieuwe bestanden binnenhalen (upload, sleep of camera) ----
+    async function verwerkBestanden(files){
+      var lijst = Array.prototype.slice.call(files || []);
+      if(!lijst.length) return;
+      for(var i = 0; i < lijst.length; i++){
+        var f = lijst[i];
+        toonStatus('Bestand '+(i+1)+' van '+lijst.length+' — uploaden: '+f.name);
+        var pad = await uploadBestand(f);
+        if(pad === false) continue;
+        var rij = {
+          user_id: user.id, administratie_id: curAdmin, soort: soort,
+          bestand_pad: pad, bestand_naam: f.name
+        };
+        // AI-herkenning: één keer, bij binnenkomst in de map.
+        try {
+          toonStatus('Bestand '+(i+1)+' van '+lijst.length+' — wordt gelezen: '+f.name);
+          var base64 = await new Promise(function(res, rej){
+            var fr = new FileReader();
+            fr.onload = function(){ res(String(fr.result).split(",")[1]); };
+            fr.onerror = rej; fr.readAsDataURL(f);
+          });
+          var mt = f.type || (f.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+          var r = await fetch("/api/extract", {
+            method:"POST", headers:{ "content-type":"application/json" },
+            body: JSON.stringify({ soort: soort, media_type: mt, data: base64 })
+          });
+          var uit = await r.json();
+          if(uit.verbruik) logApiKosten("verzamelmap "+soort, uit.verbruik);
+          if(uit.ok && uit.velden){
+            var v = uit.velden;
+            rij.herkend = true;
+            if(v.datum) rij.datum = v.datum;
+            if(v.naam) rij.naam = v.naam;
+            if(v.omschrijving) rij.omschrijving = v.omschrijving;
+            if(v.bedrag_excl != null) rij.bedrag_excl = v.bedrag_excl;
+            if(v.btw_bedrag != null) rij.btw_bedrag = v.btw_bedrag;
+            if(v.bedrag_incl != null) rij.bedrag_incl = v.bedrag_incl;
+            if(v.btw_pct != null) rij.btw_pct = v.btw_pct;
+          }
+        } catch(e){ /* herkenning is een extraatje; opslaan gaat door */ }
+        var ins = await dbClient().schema('smart_admin').from('inbox').insert(rij);
+        if(ins.error){ await fwMelding("Opslaan in de map mislukte: " + ins.error.message); }
+      }
+      toonStatus('');
+      await schermVerzamelmap(soort);
+    }
+
+    var drop = document.getElementById('vm-drop');
+    var fileEl = document.getElementById('vm-file');
+    drop.onclick = function(){ fileEl.click(); };
+    fileEl.onchange = function(){ verwerkBestanden(fileEl.files); };
+    drop.ondragover = function(e){ e.preventDefault(); drop.style.borderColor = 'var(--goud)'; };
+    drop.ondragleave = function(){ drop.style.borderColor = 'var(--rand)'; };
+    drop.ondrop = function(e){
+      e.preventDefault(); drop.style.borderColor = 'var(--rand)';
+      if(e.dataTransfer && e.dataTransfer.files) verwerkBestanden(e.dataTransfer.files);
+    };
+
+    // ---- camera: webcam-venster; lukt dat niet, dan de camera-invoer van
+    // het apparaat zelf (op de telefoon opent die direct de camera-app) ----
+    var captureEl = document.getElementById('vm-capture');
+    captureEl.onchange = function(){ verwerkBestanden(captureEl.files); };
+    document.getElementById('vm-camera').onclick = async function(){
+      var stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      } catch(e){ captureEl.click(); return; }
+      var overlay = document.createElement('div');
+      overlay.style.cssText = "position:fixed; inset:0; background:rgba(27,44,79,.75); z-index:2600; display:flex; align-items:center; justify-content:center; padding:20px;";
+      overlay.innerHTML =
+        '<div style="background:var(--papier); border-radius:14px; padding:14px; max-width:560px; width:100%;">'+
+          '<video id="vm-video" autoplay playsinline style="width:100%; border-radius:10px; background:#000;"></video>'+
+          '<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">'+
+            '<button id="vm-cam-stop" style="background:transparent; border:1px solid var(--rand); color:var(--grijs); border-radius:8px; font-size:12.5px; padding:9px 16px; cursor:pointer;">Annuleren</button>'+
+            '<button id="vm-cam-foto" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:700; padding:9px 18px; cursor:pointer;">Foto maken</button>'+
+          '</div>'+
+        '</div>';
+      document.body.appendChild(overlay);
+      var video = document.getElementById('vm-video');
+      video.srcObject = stream;
+      function sluitCam(){ try { stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){} overlay.remove(); }
+      document.getElementById('vm-cam-stop').onclick = sluitCam;
+      document.getElementById('vm-cam-foto').onclick = function(){
+        var c = document.createElement('canvas');
+        c.width = video.videoWidth; c.height = video.videoHeight;
+        c.getContext('2d').drawImage(video, 0, 0);
+        c.toBlob(function(blob){
+          sluitCam();
+          if(!blob) return;
+          var f = new File([blob], "scan_"+Date.now()+".jpg", { type: "image/jpeg" });
+          verwerkBestanden([f]);
+        }, "image/jpeg", 0.92);
+      };
+    };
+
+    // ---- acties per item ----
+    Array.prototype.forEach.call(schermEl.querySelectorAll('.vm-bekijk'), function(b){
+      b.onclick = function(){ openBestand(b.getAttribute('data-pad')); };
+    });
+    Array.prototype.forEach.call(schermEl.querySelectorAll('.vm-item'), function(el){
+      var id = el.getAttribute('data-id');
+      var item = items.filter(function(x){ return x.id === id; })[0];
+
+      el.querySelector('.vm-weg').onclick = async function(){
+        var ok = await fwBevestig("Dit item en het bestand uit de map verwijderen?", { okLabel:"Verwijderen", annuleerLabel:"Annuleren" });
+        if(!ok) return;
+        try { await dbClient().storage.from('adm-bestanden').remove([item.bestand_pad]); } catch(e){}
+        var r = await dbClient().schema('smart_admin').from('inbox').delete().eq('id', id);
+        if(r.error){ await fwMelding("Verwijderen mislukt: " + r.error.message); return; }
+        await schermVerzamelmap(soort);
+      };
+
+      el.querySelector('.vm-opnemen').onclick = async function(){
+        var datum = el.querySelector('.vm-datum').value;
+        var naam = el.querySelector('.vm-naam').value.trim();
+        var oms = el.querySelector('.vm-oms').value.trim();
+        var excl = parseFloat(el.querySelector('.vm-excl').value) || 0;
+        var pct = parseInt(el.querySelector('.vm-btw').value, 10);
+        if(!datum){ await fwMelding("Vul eerst een datum in."); return; }
+        if(!excl){ await fwMelding("Vul eerst het bedrag (excl. btw) in."); return; }
+        var btw = Math.round((excl*pct/100)*100)/100;
+        var incl = Math.round((excl+btw)*100)/100;
+        this.textContent = "Bezig…"; this.disabled = true;
+        var ok = await bewaarBoeking({
+          soort: soort, datum: datum, naam: naam, omschrijving: oms,
+          bedrag_excl: excl, btw_bedrag: btw, bedrag_incl: incl, btw_pct: pct,
+          bron: "verzamelmap", bestand_pad: item.bestand_pad
+        });
+        if(!ok){ this.textContent = "✓ Opnemen in boekhouding"; this.disabled = false; return; }
+        await dbClient().schema('smart_admin').from('inbox')
+          .update({ status:'verwerkt', boeking_id: ok.id, datum: datum||null, naam: naam, omschrijving: oms, bedrag_excl: excl, btw_bedrag: btw, bedrag_incl: incl, btw_pct: pct })
+          .eq('id', id);
+        ververStrook();
+        await schermVerzamelmap(soort);
+      };
+    });
+  }
+
   async function schermBoeking(soort){
     var cfg = SOORT_CONFIG[soort];
     var alle = await laadBoekingen(soort);
@@ -2185,6 +2398,12 @@
         if(ok){ applyAdmin(); await renderScherm(); }
         else { b.textContent = "Administratie aanmaken"; b.disabled = false; }
       };
+      return;
+    }
+
+    if(curView === "invoeren" && (curItem === "map-omzet" || curItem === "map-kosten")){
+      schermEl.innerHTML = '<div class="fw-leeg">Laden…</div>';
+      await schermVerzamelmap(curItem === "map-omzet" ? "omzet" : "kosten");
       return;
     }
 
@@ -4668,7 +4887,7 @@
       document.querySelectorAll('.fw-top').forEach(function(x){ x.classList.remove('actief'); });
       t.classList.add('actief');
       curView = t.getAttribute('data-view');
-      curItem = views[curView].items[0].id;
+      curItem = views[curView].standaardItem || views[curView].items[0].id;
       bewerkId = null; factuurWachtrij = []; factuurIndex = 0;
       pasMenuKleurenToe();
       renderNav(); await renderScherm();
