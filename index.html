@@ -1830,6 +1830,11 @@
     var captureEl = document.getElementById('vm-capture');
     captureEl.onchange = function(){ verwerkBestanden(captureEl.files); };
     document.getElementById('vm-camera').onclick = async function(){
+      // Op de telefoon of tablet: altijd de eigen camera-app van het apparaat
+      // (stabiel en scherp). Alleen op de PC het webcam-venster in de browser.
+      var mobiel = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+                   || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
+      if(mobiel){ captureEl.click(); return; }
       var stream = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
