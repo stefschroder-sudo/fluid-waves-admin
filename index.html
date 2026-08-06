@@ -43,6 +43,22 @@
   }
   .fw-top[data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
   .fw-top[data-tip]:hover::before { opacity: 1; }
+  /* Tooltip van de rekenmachine-knop: zelfde stijl, rechts uitgelijnd zodat hij binnen het scherm blijft */
+  #fw-calc-knop { position: relative; }
+  #fw-calc-knop::after {
+    content: attr(data-tip);
+    position: absolute; top: calc(100% + 8px); right: 0; transform: translateY(-4px);
+    background: #1B2C4F; color: #FFFFFF; font-size: 11px; font-weight: 600; line-height: 1.35;
+    padding: 8px 11px; border-radius: 7px; white-space: normal; width: max-content; max-width: 230px;
+    box-shadow: 0 4px 14px rgba(27,44,79,.28); border: 1px solid var(--goud);
+    opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 3000;
+  }
+  #fw-calc-knop::before {
+    content: ""; position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-bottom-color: #1B2C4F; opacity: 0; transition: opacity .15s; z-index: 3001;
+  }
+  #fw-calc-knop:hover::after { opacity: 1; transform: translateY(0); }
+  #fw-calc-knop:hover::before { opacity: 1; }
   .fw-note { max-width: 1080px; margin: 12px auto 0; font-size: 12px; color: #7A756A; text-align: center; }
   .fw-leeg { padding: 40px 20px; text-align: center; color: var(--grijs); }
   .fw-leeg i { font-size: 30px; color: var(--rand); display: block; margin-bottom: 8px; }
@@ -170,7 +186,7 @@
     <div class="fw-top" data-view="balans" data-tip="Stel samen met je boekhouder of accountant definitief jouw kloppende balans op" style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 3v18M7 21h10M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0zM3 7h18"/></svg>7. Balans</div>
     <div class="fw-top" data-view="ib" data-tip="Stuur deze gegevens naar jouw belastingadviseur om de IB aan te kunnen geven" style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>8. IB-aangifte</div>
     <div class="fw-top" data-view="disclaimer" data-tip="Algemene voorwaarden en privacy. U bent zelf verantwoordelijk voor de inhoud van uw administratie; de aanbieder heeft daar geen inzage in. Klik voor de volledige voorwaarden." style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>9. Voorwaarden</div>
-    <div id="fw-calc-knop" title="Rekenmachine" style="display:flex; align-items:center; gap:4px; margin-left:auto; padding:6px 12px; font-size:11px; color:var(--navy); cursor:pointer; user-select:none;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:21px; height:21px;"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6"/><path d="M9 11h.01M12 11h.01M15 11h.01M9 14.5h.01M12 14.5h.01M15 14.5h.01M9 18h.01M12 18h.01M15 18h.01"/></svg></div>
+    <div id="fw-calc-knop" data-tip="Rekenmachine — telt bijvoorbeeld saldi van meerdere rekeningen op; blijft staan tot je hem sluit" style="display:flex; align-items:center; gap:4px; margin-left:auto; padding:6px 12px; font-size:11px; color:var(--navy); cursor:pointer; user-select:none;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:21px; height:21px;"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6"/><path d="M9 11h.01M12 11h.01M15 11h.01M9 14.5h.01M12 14.5h.01M15 14.5h.01M9 18h.01M12 18h.01M15 18h.01"/></svg></div>
   </div>
 
   <!-- ── Zwevende rekenmachine (opent vanuit de menubalk, blijft staan tot je hem sluit) ── -->
