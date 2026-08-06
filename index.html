@@ -1258,30 +1258,37 @@
     var v = views[curView];
     navEl.innerHTML = "";
     var vorigeGroep = null;
-    var doel = navEl;   // waar items in komen; in menu 3 wordt dit het "Handmatig"-kader
+    var doel = navEl;   // waar items in komen; in menu 3 zijn dat de twee kaders
+
+    // Omkaderd blok met een kop erin (menu 3: "Verzamelmappen · via scan" en "Handmatig")
+    function maakKader(titel, eerste){
+      var kader = document.createElement('div');
+      kader.style.cssText = "border:1.5px solid var(--rand); border-radius:10px; padding:8px 4px 6px;"+(eerste?"":" margin-top:14px;");
+      var kop = document.createElement('div');
+      kop.className = "fw-lbl";
+      kop.style.cssText = "font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--navy); padding:0 8px 4px;";
+      kop.textContent = titel;
+      kader.appendChild(kop);
+      navEl.appendChild(kader);
+      return kader;
+    }
+
     v.items.forEach(function(it){
       var isMap = it.id.indexOf('map-') === 0;
       if(it.groep !== vorigeGroep){
-        // Menu 3: na de verzamelmappen komen alle handmatige groepen samen
-        // in één omkaderd blok met het label "Handmatig".
-        if(curView === 'invoeren' && !isMap && doel === navEl && vorigeGroep === 'Verzamelmappen'){
-          var kader = document.createElement('div');
-          kader.style.cssText = "border:1px solid var(--rand); border-radius:10px; padding:8px 4px 6px; margin-top:14px;";
-          var kop = document.createElement('div');
-          kop.className = "fw-lbl";
-          kop.style.cssText = "font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--grijs); font-weight:700; padding:0 8px 4px;";
-          kop.textContent = "Handmatig";
-          kader.appendChild(kop);
-          navEl.appendChild(kader);
-          doel = kader;
+        if(curView === 'invoeren' && isMap && vorigeGroep === null){
+          doel = maakKader("Verzamelmappen · via scan", true);
+        } else if(curView === 'invoeren' && !isMap && vorigeGroep === 'Verzamelmappen'){
+          doel = maakKader("Handmatig", false);
         }
-        var g = document.createElement('div');
-        g.className = "fw-lbl";
-        var goudGroep = (it.groep === 'Verzamelmappen');
-        g.style.cssText = "font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:0 8px; margin:"+(vorigeGroep?"14px":"0")+" 0 6px; "+
-          (goudGroep ? "color:var(--goud); font-weight:800;" : "color:var(--grijs);");
-        g.textContent = goudGroep ? "Verzamelmappen · via scan" : it.groep;
-        doel.appendChild(g);
+        // Het groepslabel "Verzamelmappen" zelf niet herhalen: de kaderkop zegt het al.
+        if(it.groep !== 'Verzamelmappen'){
+          var g = document.createElement('div');
+          g.className = "fw-lbl";
+          g.style.cssText = "font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--grijs); padding:0 8px; margin:"+(vorigeGroep?"12px":"0")+" 0 6px;";
+          g.textContent = it.groep;
+          doel.appendChild(g);
+        }
         vorigeGroep = it.groep;
       }
       var d = document.createElement('div');
@@ -1289,11 +1296,7 @@
       d.setAttribute('data-nav', it.id);
       d.style.cssText = "display:flex; align-items:center; gap:10px; padding:9px 16px; border-radius:8px; font-size:12.5px; color:var(--inkt);";
       d.title = it.label;
-      if(isMap){
-        d.innerHTML = ic(it.icon, 'style="font-size:17px; color:var(--goud);"')+'<span class="fw-lbl" style="color:var(--goud); font-weight:800;">'+it.label+'</span>';
-      } else {
-        d.innerHTML = ic(it.icon, 'style="font-size:17px; color:var(--navy);"')+'<span class="fw-lbl">'+it.label+'</span>';
-      }
+      d.innerHTML = ic(it.icon, 'style="font-size:17px; color:var(--navy);"')+'<span class="fw-lbl">'+it.label+'</span>';
       d.onclick = function(){ curItem = it.id; bewerkId = null; factuurWachtrij = []; factuurIndex = 0; renderNav(); renderScherm(); };
       doel.appendChild(d);
     });
