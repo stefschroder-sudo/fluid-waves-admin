@@ -170,6 +170,20 @@
     <div class="fw-top" data-view="balans" data-tip="Stel samen met je boekhouder of accountant definitief jouw kloppende balans op" style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M12 3v18M7 21h10M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0zM3 7h18"/></svg>7. Balans</div>
     <div class="fw-top" data-view="ib" data-tip="Stuur deze gegevens naar jouw belastingadviseur om de IB aan te kunnen geven" style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>8. IB-aangifte</div>
     <div class="fw-top" data-view="disclaimer" data-tip="Algemene voorwaarden en privacy. U bent zelf verantwoordelijk voor de inhoud van uw administratie; de aanbieder heeft daar geen inzage in. Klik voor de volledige voorwaarden." style="display:flex; align-items:center; gap:4px; padding:9px 10px; font-size:11px; color:var(--grijs); border-bottom:2px solid transparent;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style=""><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>9. Voorwaarden</div>
+    <div id="fw-calc-knop" title="Rekenmachine" style="display:flex; align-items:center; gap:4px; margin-left:auto; padding:9px 12px; font-size:11px; color:var(--grijs); cursor:pointer; user-select:none;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px;"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6"/><path d="M9 11h.01M12 11h.01M15 11h.01M9 14.5h.01M12 14.5h.01M15 14.5h.01M9 18h.01M12 18h.01M15 18h.01"/></svg></div>
+  </div>
+
+  <!-- ── Zwevende rekenmachine (opent vanuit de menubalk, blijft staan tot je hem sluit) ── -->
+  <div id="fw-calc-pop" style="display:none; position:fixed; top:150px; right:28px; z-index:1500; background:var(--papier); border:1px solid var(--rand); border-radius:12px; box-shadow:0 10px 34px rgba(27,44,79,.24); padding:12px 12px 10px; width:186px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <span style="font-size:11px; font-weight:700; color:var(--navy);">Rekenmachine</span>
+      <button id="fw-calc-x" title="Sluiten" style="background:none; border:none; color:var(--grijs); font-size:16px; cursor:pointer; line-height:1; padding:2px 5px;">&times;</button>
+    </div>
+    <div style="display:flex; gap:4px; align-items:center;">
+      <input id="calc-scherm" type="text" readonly value="0" style="flex:1; min-width:0; padding:5px 7px; border:1px solid var(--rand); border-radius:6px; font-size:12px; background:var(--wit); text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:var(--navy);">
+      <button id="calc-naar-saldo" title="Zet het resultaat in het saldoveld op het dashboard" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:5px; font-size:12px; font-weight:700; padding:5px 8px; cursor:pointer; white-space:nowrap;">→</button>
+    </div>
+    <div id="calc-knoppen" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; margin-top:6px;"></div>
   </div>
 
   <div style="display:flex;">
@@ -501,6 +515,73 @@
   var aboBtn = document.getElementById('fw-abo');
   if(aboBtn) aboBtn.onclick = function(){ toonAbonnement(); };
 
+  // ── Rekenmachine: zwevende popup, geopend vanuit de menubalk ─────────────
+  // Blijft staan terwijl je door de app navigeert; sluiten met het kruisje.
+  (function(){
+    var pop = document.getElementById('fw-calc-pop');
+    var icoonKnop = document.getElementById('fw-calc-knop');
+    var container = document.getElementById('calc-knoppen');
+    if(!pop || !icoonKnop || !container) return;
+
+    container.innerHTML = ['C','←','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','=',''].map(function(k){
+      if(k==='') return '<span></span>';
+      var isOp = ('÷×−+=%'.indexOf(k) >= 0);
+      var isWis = (k==='C'||k==='←');
+      var bg = isOp ? 'var(--navy)' : (isWis ? 'var(--papier)' : 'var(--wit)');
+      var kl = isOp ? 'var(--papier)' : 'var(--inkt)';
+      return '<button class="calc-k" data-k="'+k+'" style="padding:6px 0; border:1px solid var(--rand); border-radius:5px; background:'+bg+'; color:'+kl+'; font-size:11px; font-weight:600; cursor:pointer;">'+k+'</button>';
+    }).join("");
+
+    var scherm = document.getElementById('calc-scherm');
+    var invoer = "0", vorig = null, operatie = null, reset = false;
+    function toon(){ scherm.value = invoer; }
+    function reken(a, b, op){
+      a = Number(a); b = Number(b);
+      if(op==='+') return a+b;
+      if(op==='−') return a-b;
+      if(op==='×') return a*b;
+      if(op==='÷') return b===0 ? 0 : a/b;
+      if(op==='%') return a/100;
+      return b;
+    }
+    function druk(k){
+      if(k==='C'){ invoer="0"; vorig=null; operatie=null; reset=false; toon(); return; }
+      if(k==='←'){ invoer = (invoer.length>1) ? invoer.slice(0,-1) : "0"; toon(); return; }
+      if(k==='%'){ invoer = String(Number(invoer)/100); reset=true; toon(); return; }
+      if('÷×−+'.indexOf(k) >= 0){
+        if(operatie && !reset){ var uit0 = reken(vorig, invoer, operatie); invoer = String(Math.round(uit0*100)/100); toon(); }
+        vorig = invoer; operatie = k; reset = true; return;
+      }
+      if(k==='='){
+        if(operatie){ var uit = reken(vorig, invoer, operatie); invoer = String(Math.round(uit*100)/100); operatie=null; vorig=null; reset=true; toon(); }
+        return;
+      }
+      if(reset){ invoer = (k==='.') ? "0." : k; reset=false; }
+      else {
+        if(k==='.' && invoer.indexOf('.')>=0) return;
+        invoer = (invoer==="0" && k!=='.') ? k : invoer + k;
+      }
+      toon();
+    }
+    Array.prototype.forEach.call(container.querySelectorAll('.calc-k'), function(b){
+      b.onclick = function(){ druk(b.getAttribute('data-k')); };
+    });
+
+    icoonKnop.onclick = function(){
+      pop.style.display = (pop.style.display === 'none') ? 'block' : 'none';
+    };
+    document.getElementById('fw-calc-x').onclick = function(){ pop.style.display = 'none'; };
+
+    // →: resultaat in het saldoveld op het dashboard zetten (als dat in beeld
+    // is); anders naar het klembord kopiëren.
+    document.getElementById('calc-naar-saldo').onclick = function(){
+      var w = Math.round((Number(invoer)||0)*100)/100;
+      var veld = document.getElementById('dash-bank');
+      if(veld){ veld.value = w; if(veld.oninput) veld.oninput(); }
+      else { try { navigator.clipboard.writeText(String(w)); } catch(e){} }
+    };
+  })();
+
   // ── Wachtwoord tonen/verbergen (oogje) ────────────────────────────────────
   (function(){
     var oog = document.getElementById('fw-pass-oog');
@@ -686,7 +767,8 @@
     start: {
       titel:"Start", actie:null,
       items:[
-        {id:"welkom", icon:"file-text", label:"Welkom", groep:"Start"}
+        {id:"welkom", icon:"file-text", label:"Welkom", groep:"Start"},
+        {id:"handleiding", icon:"file-text", label:"Handleiding", groep:"Start"}
       ]
     },
     invoeren: {
@@ -1984,7 +2066,8 @@
           { nr:"7", titel:"Balans", uitleg:"Voorbereiding met een signaal of hij sluit — samen met je accountant af te ronden." },
           { nr:"8", titel:"IB-aangifte", uitleg:"Klaar om te delen met je belastingadviseur voor de aangifte." }
         ])+
-        '<div style="display:flex; justify-content:flex-end; margin-top:4px;">'+
+        '<div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">'+
+          '<button id="fw-start-handleiding" style="background:transparent; color:var(--navy); border:1px solid var(--navy); border-radius:9px; font-size:13px; font-weight:700; padding:11px 22px; cursor:pointer;">Handleiding</button>'+
           '<button id="fw-start-verder" style="background:var(--navy); color:var(--papier); border:none; border-radius:9px; font-size:13px; font-weight:700; padding:11px 26px; cursor:pointer;">Aan de slag</button>'+
         '</div>'+
       '</div>';
@@ -1993,6 +2076,60 @@
       var dash = document.querySelector('.fw-top[data-view="dashboard"]');
       if(dash) dash.onclick();
     };
+    var hulpKnop = document.getElementById('fw-start-handleiding');
+    if(hulpKnop) hulpKnop.onclick = openHandleiding;
+  }
+
+  // Opent de handleiding (het tweede zijbalk-item onder Start).
+  function openHandleiding(){
+    document.querySelectorAll('.fw-top').forEach(function(x){ x.classList.remove('actief'); });
+    var startTab = document.querySelector('.fw-top[data-view="start"]');
+    if(startTab) startTab.classList.add('actief');
+    curView = "start"; curItem = "handleiding";
+    pasMenuKleurenToe(); renderNav(); renderScherm();
+  }
+
+  // ── Handleiding-pagina: de complete gebruikershandleiding in de app ──────
+  function schermHandleiding(){
+    function sectie(titel, inhoud){
+      return '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px 20px; margin-bottom:14px;">'+
+        '<div style="font-size:14px; font-weight:800; color:var(--navy); margin-bottom:10px;">'+titel+'</div>'+
+        '<div style="font-size:12.5px; color:var(--inkt); line-height:1.65;">'+inhoud+'</div>'+
+      '</div>';
+    }
+    function stap(nr, titel, tekst){
+      return '<div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:11px;">'+
+        '<span style="flex-shrink:0; width:22px; height:22px; border-radius:6px; background:var(--goud); color:var(--navy); font-size:11.5px; font-weight:800; display:flex; align-items:center; justify-content:center;">'+nr+'</span>'+
+        '<div><b style="color:var(--navy);">'+titel+'</b><br>'+tekst+'</div>'+
+      '</div>';
+    }
+    schermEl.innerHTML =
+      '<div style="max-width:760px;">'+
+      sectie("Snelstart — binnen 15 minuten aan de slag",
+        stap(1,"Account en inloggen","Maak een account aan met je e-mailadres en wachtwoord (minimaal 8 tekens) en log in. Je kunt direct aan de slag in de proefmodus; alleen voor het bewaren van je gegevens is een abonnement nodig (stap 7).")+
+        stap(2,"Je eerste administratie","Geef je administratie de naam van je bedrijf. Meerdere bedrijven? Via de administratie-kiezer linksboven wissel je en maak je extra administraties aan.")+
+        stap(3,"Bedrijfsgegevens","Ga naar 2. Offertes en Facturen → Mijn bedrijfsgegevens. Vul je bedrijfsnaam in en upload je logo; dit komt automatisch op je offertes en facturen.")+
+        stap(4,"Kies je periode","Bovenin kies je Maand, Kwartaal of Jaar plus het boekjaar. Alles beweegt mee. Doe je btw-aangifte per kwartaal? Zet hem dan op Kwartaal. De cijferstrook toont doorlopend omzet, kosten, btw en openstaande offertes.")+
+        stap(5,"Je eerste offerte of factuur","Maak eerst een klant aan (2. Offertes en Facturen → Klanten). Kies dan Nieuwe offerte: regels, uurtarief, btw per regel. Bekijk het voorbeeld, verstuur als PDF, en zet hem na akkoord om naar een factuur — die wordt automatisch als omzet geboekt.")+
+        stap(6,"Kosten en overige omzet","Bij 3. Inkomsten en uitgaven staat het invoerformulier bovenaan. Sleep er een bonnetje of factuur in: de AI-bonherkenning vult de regel grotendeels voor je in. Houd op het Dashboard ook je actuele banksaldo bij.")+
+        stap(7,"Abonneren","Klik rechtsboven op Abonnement. Eerste 2 maanden €10 per maand, daarna €19,95 per maand (ex btw). Maandelijks opzegbaar, gewoon in de app."))+
+      sectie("Offertes en facturen (menu 2)",
+        "Vijf onderdelen in de zijbalk: Nieuwe offerte, Mijn offertes, Mijn facturen, Klanten en Mijn bedrijfsgegevens. Een definitieve factuur wordt automatisch als omzet geboekt — dubbel invoeren bestaat niet. Zet een factuur op “Betaald” zodra het geld binnen is; zo zie je altijd wat er openstaat. Een creditfactuur maak je vanuit de oorspronkelijke factuur en wordt automatisch negatief geboekt.")+
+      sectie("Inkomsten en uitgaven (menu 3)",
+        "Omzet (buiten je facturen om), Inkoopfacturen en Kosten, Bedrijfsmiddelen, Leningen &amp; investeringen en Loonstroken. Voer bedragen in- of exclusief btw in; de rest wordt uitgerekend. Bedrijfsmiddelen en leningen lopen automatisch mee in je resultaat en balans (afschrijvingen). Sleep bonnen of facturen in de uploadzone voor AI-herkenning.")+
+      sectie("Het Dashboard (menu 1)",
+        "Overzicht (kerncijfers en openstaande posten), Recent (laatste boekingen) en Aandachtspunten. Vul het blok Actueel banksaldo zelf in; de balans gebruikt dit bij “Bank en kas”. De rekenmachine vind je rechts in de menubalk. Aan een automatische bankkoppeling wordt gewerkt; daarvan word je op de hoogte gehouden.")+
+      sectie("BTW-aangifte (menu 4)",
+        "Aan het einde van je periode staat de aangifte klaar, per rubriek opgebouwd uit je eigen boekingen. Markeer per periode wanneer de aangifte is gedaan en betaald. Corrigeren doe je met Suppletie; via Herkomst per bestand zie je waar elk bedrag vandaan komt. De bedragen neem je over in het portaal van de Belastingdienst.")+
+      sectie("Cijfers en jaarwerk (menu 5 t/m 8)",
+        "<b>Belastingregels</b>: AI-informatie over actuele regels — puur ter informatie, wordt niet automatisch geboekt. <b>Resultaat</b>: je winst- en verliesrekening, ook per kwartaal of maand. <b>Balans</b>: voorbereid uit je invoer, samen met je accountant af te ronden. <b>IB-aangifte</b>: het jaaroverzicht voor je belastingadviseur.")+
+      sectie("Delen met je boekhouder of accountant",
+        "Gebruik de exportknoppen: de btw-export per kwartaal (Excel), de resultaat-export, de IB-export voor het jaarwerk, en elke factuur als PDF. Praktisch ritme: na elk kwartaal de btw-export, aan het einde van het jaar de IB-export. Je adviseur hoeft zelf niet in de app.")+
+      sectie("Je abonnement",
+        "Via de knop Abonnement rechtsboven: abonneren, inzien en opzeggen. Eerste 2 maanden €10/mnd, daarna €19,95/mnd (ex btw), maandelijks opzegbaar. Na opzegging loopt je toegang door tot het einde van de betaalde periode; je gegevens blijven bewaard. In de proefmodus kun je alles bekijken en invullen, maar niet bewaren.")+
+      sectie("Goed om te weten",
+        "Jij blijft eigenaar van en verantwoordelijk voor je administratie; de aanbieder heeft geen inzage in je gegevens. Maak zelf exports voor de wettelijke bewaarplicht (7 jaar). De volledige voorwaarden staan onder 9. Voorwaarden. Vragen? Stel ze via het contactformulier op fluidwaves.nl — laat je naam, e-mailadres en telefoonnummer achter, dan nemen we contact met je op.")+
+      '</div>';
   }
 
   async function renderScherm(){
@@ -2005,7 +2142,10 @@
     ververStrook();   // overzichtsstrook meebewegen met periode/administratie/wijzigingen
 
     // Start-pagina: ook tonen als er nog geen administratie is (dit ís de intro).
-    if(curView === "start"){ schermStart(); return; }
+    if(curView === "start"){
+      if(curItem === "handleiding"){ schermHandleiding(); } else { schermStart(); }
+      return;
+    }
     // Nog geen administratie? Toon een nette aanmaakknop i.p.v. de database in te gaan.
     if(!curAdmin){
       schermEl.innerHTML =
@@ -2177,23 +2317,7 @@
           '<button id="dash-bank-opslaan" style="background:var(--navy); color:var(--papier); border:none; border-radius:8px; font-size:12.5px; font-weight:600; padding:10px 18px; cursor:pointer;">Opslaan</button>'+
           '<span id="dash-bank-status" style="font-size:11.5px; color:var(--groen);"></span>'+
         '</div>'+
-        '<div style="border-top:1px solid var(--rand-licht); margin-top:16px; padding-top:14px;">'+
-          '<div style="font-size:11px; color:var(--grijs); margin-bottom:8px;">Rekenmachine — handig om bijvoorbeeld saldi van meerdere rekeningen op te tellen.</div>'+
-          '<div style="display:flex; gap:4px; align-items:center; max-width:150px;">'+
-            '<input id="calc-scherm" type="text" readonly value="0" style="flex:1; min-width:0; padding:4px 6px; border:1px solid var(--rand); border-radius:6px; font-size:11px; background:var(--papier); text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:var(--navy);">'+
-            '<button id="calc-naar-saldo" title="Zet resultaat in het saldoveld" style="background:transparent; border:1px solid var(--navy); color:var(--navy); border-radius:5px; font-size:11px; font-weight:700; padding:4px 7px; cursor:pointer; white-space:nowrap;">→</button>'+
-          '</div>'+
-          '<div id="calc-knoppen" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; margin-top:4px; max-width:150px;">'+
-            ['C','←','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','=',''].map(function(k){
-              if(k==='') return '<span></span>';
-              var isOp = ('÷×−+=%'.indexOf(k) >= 0);
-              var isWis = (k==='C'||k==='←');
-              var bg = isOp ? 'var(--navy)' : (isWis ? 'var(--papier)' : 'var(--wit)');
-              var kl = isOp ? 'var(--papier)' : 'var(--inkt)';
-              return '<button class="calc-k" data-k="'+k+'" style="padding:4px 0; border:1px solid var(--rand); border-radius:5px; background:'+bg+'; color:'+kl+'; font-size:10px; font-weight:600; cursor:pointer;">'+k+'</button>';
-            }).join("")+
-          '</div>'+
-        '</div>'+
+        '<div style="border-top:1px solid var(--rand-licht); margin-top:16px; padding-top:12px; font-size:11px; color:var(--grijs);">Tip: de rekenmachine zit rechts in de menubalk — handig om saldi van meerdere rekeningen op te tellen. Met de →-knop zet je het resultaat direct in het saldoveld.</div>'+
       '</div>'+
       '<div style="background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:18px;">'+
         '<div style="font-size:13px; font-weight:700; color:var(--navy); margin-bottom:4px;">Exporteren</div>'+
@@ -2230,53 +2354,6 @@
     }
     dashBankEl.oninput = werkBankPreviewBij;
     werkBankPreviewBij();
-
-    // Rekenmachine
-    (function(){
-      var scherm = document.getElementById('calc-scherm');
-      var invoer = "0";      // wat er getoond wordt
-      var vorig = null;      // vorige waarde
-      var operatie = null;   // gekozen bewerking
-      var reset = false;     // volgende cijfer begint opnieuw
-      function toon(){ scherm.value = invoer; }
-      function reken(a, b, op){
-        a = Number(a); b = Number(b);
-        if(op==='+') return a+b;
-        if(op==='−') return a-b;
-        if(op==='×') return a*b;
-        if(op==='÷') return b===0 ? 0 : a/b;
-        if(op==='%') return a/100;
-        return b;
-      }
-      function druk(k){
-        if(k==='C'){ invoer="0"; vorig=null; operatie=null; reset=false; toon(); return; }
-        if(k==='←'){ invoer = (invoer.length>1) ? invoer.slice(0,-1) : "0"; toon(); return; }
-        if(k==='%'){ invoer = String(Number(invoer)/100); reset=true; toon(); return; }
-        if('÷×−+'.indexOf(k) >= 0){
-          if(operatie && !reset){ var uit0 = reken(vorig, invoer, operatie); invoer = String(Math.round(uit0*100)/100); toon(); }
-          vorig = invoer; operatie = k; reset = true; return;
-        }
-        if(k==='='){
-          if(operatie){ var uit = reken(vorig, invoer, operatie); invoer = String(Math.round(uit*100)/100); operatie=null; vorig=null; reset=true; toon(); }
-          return;
-        }
-        // cijfer of punt
-        if(reset){ invoer = (k==='.') ? "0." : k; reset=false; }
-        else {
-          if(k==='.' && invoer.indexOf('.')>=0) return;
-          invoer = (invoer==="0" && k!=='.') ? k : invoer + k;
-        }
-        toon();
-      }
-      Array.prototype.forEach.call(document.querySelectorAll('.calc-k'), function(b){
-        b.onclick = function(){ druk(b.getAttribute('data-k')); };
-      });
-      document.getElementById('calc-naar-saldo').onclick = function(){
-        var w = Number(invoer)||0;
-        dashBankEl.value = Math.round(w*100)/100;
-        werkBankPreviewBij();
-      };
-    })();
 
     document.getElementById('dash-export').onclick = async function(){
       this.textContent = "Bezig…"; this.disabled = true;
