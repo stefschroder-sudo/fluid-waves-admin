@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B2C4F">
+<title>Smart Invoice — Fluid Waves</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Smart Invoice">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Source+Serif+4:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy:#1B2C4F; --goud:#C9A227; --papier:#F4F1EA; --papier-diep:#EAE4D6; --wit:#FBF8F0;
+    --inkt:#2A2A28; --grijs:#6B7280; --rand:#D8D2C4; --rand-licht:#E7E2D6;
+    --groen:#2E7D5B; --rood:#B23A48; --grijsblauw:#9BB0C9;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:var(--papier-diep); color:var(--inkt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  body{ min-height:100vh; }
+  h1,h2,h3,.merk{ font-family:"Bricolage Grotesque",-apple-system,system-ui,sans-serif; }
+  button{ font-family:inherit; }
+  input,select,textarea{ font-family:inherit; }
+  .app{ max-width:620px; margin:0 auto; min-height:100vh; background:var(--papier);
+    display:flex; flex-direction:column; box-shadow:0 0 40px rgba(27,44,79,.08); }
+  /* Kopbalk */
+  .kop{ position:sticky; top:0; z-index:20; background:var(--navy); color:#fff;
+    padding:calc(env(safe-area-inset-top) + 12px) 16px 12px; display:flex; align-items:center; gap:10px;
+    border-bottom:2px solid var(--goud); }
+  .kop .merk{ font-weight:700; font-size:15px; letter-spacing:.01em; }
+  .kop .merk small{ display:block; font-family:-apple-system,system-ui,sans-serif; font-weight:400;
+    font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--goud); }
+  .kop-recht{ margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .badge{ font-size:10px; padding:3px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.3);
+    color:#fff; white-space:nowrap; }
+  .badge.proef{ background:var(--goud); color:var(--navy); border-color:var(--goud); font-weight:700; }
+  /* Inhoud */
+  main{ flex:1; padding:16px 16px 92px; }
+  .kaart{ background:var(--wit); border:1px solid var(--rand-licht); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .kaart h2{ margin:0 0 4px; font-size:15px; color:var(--navy); }
+  .sub{ font-size:12px; color:var(--grijs); line-height:1.5; }
+  label.veld{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--grijs); margin:10px 0 3px; }
+  input.in,select.in,textarea.in{ width:100%; padding:11px 12px; border:1px solid var(--rand); border-radius:9px;
+    font-size:15px; background:#fff; color:var(--inkt); }
+  textarea.in{ resize:vertical; min-height:52px; }
+  .rij{ display:flex; gap:8px; }
+  .rij > *{ flex:1; min-width:0; }
+  .knop{ display:inline-flex; align-items:center; justify-content:center; gap:8px; border:none; cursor:pointer;
+    border-radius:10px; font-size:15px; font-weight:600; padding:13px 18px; }
+  .knop.primair{ background:var(--navy); color:var(--papier); }
+  .knop.goud{ background:var(--goud); color:var(--navy); font-weight:700; }
+  .knop.rand{ background:transparent; color:var(--navy); border:1px solid var(--navy); }
+  .knop.stil{ background:transparent; color:var(--grijs); border:1px solid var(--rand); }
+  .knop.groot{ width:100%; padding:16px; font-size:16px; }
+  .knop:disabled{ opacity:.6; }
+  .ic{ width:1em; height:1em; display:inline-block; vertical-align:-.12em; }
+  .toggle{ display:flex; background:var(--papier-diep); border-radius:10px; padding:4px; gap:4px; }
+  .toggle button{ flex:1; border:none; background:transparent; padding:10px; border-radius:8px; font-size:14px; font-weight:600; color:var(--grijs); cursor:pointer; }
+  .toggle button.aan{ background:var(--navy); color:#fff; }
+  .info{ background:#FBF6E6; border:1px solid var(--goud); border-radius:10px; padding:11px 13px; font-size:12px; color:var(--navy); line-height:1.5; }
+  .leeg{ text-align:center; color:var(--grijs); font-size:13px; padding:26px 12px; }
+  /* Map-items */
+  .item{ background:var(--wit); border:1px solid var(--rand-licht); border-radius:12px; padding:12px; margin-bottom:10px; }
+  .item .kop-r{ display:flex; gap:10px; align-items:flex-start; }
+  .item .thumb{ width:46px; height:46px; flex-shrink:0; border:1px solid var(--rand); border-radius:9px; background:var(--papier);
+    display:flex; align-items:center; justify-content:center; color:var(--navy); cursor:pointer; }
+  .mini{ font-size:10.5px; color:var(--grijs); margin-bottom:5px; }
+  .veldrij{ display:flex; gap:6px; flex-wrap:wrap; }
+  .veldrij input,.veldrij select{ padding:8px 9px; border:1px solid var(--rand); border-radius:7px; font-size:13px; background:#fff; }
+  .itemacties{ display:flex; gap:8px; margin-top:9px; }
+  .itemacties .knop{ padding:9px 12px; font-size:13px; flex:1; }
+  /* Regels factuur */
+  .regel{ display:flex; gap:6px; align-items:center; padding:8px 0; border-top:1px solid var(--rand-licht); }
+  .regel input{ padding:8px; border:1px solid var(--rand); border-radius:7px; font-size:13px; background:#fff; }
+  .regel .r-oms{ flex:1; min-width:80px; }
+  .regel .r-num{ width:56px; text-align:right; }
+  .regel .r-btw{ width:56px; }
+  .regel .r-weg{ background:none; border:none; color:var(--grijs); cursor:pointer; padding:4px; }
+  .totrij{ display:flex; justify-content:space-between; font-size:13px; padding:3px 0; color:#C7CEDA; }
+  .totrij.eind{ font-size:17px; font-weight:700; color:#fff; border-top:1px solid rgba(255,255,255,.2); padding-top:8px; margin-top:5px; }
+  /* Onderbalk */
+  .tabbar{ position:fixed; bottom:0; left:0; right:0; z-index:30; background:var(--wit);
+    border-top:1px solid var(--rand); display:flex; padding-bottom:env(safe-area-inset-bottom); }
+  .tabbar .app-b{ max-width:620px; margin:0 auto; width:100%; display:flex; }
+  .tab{ flex:1; background:none; border:none; padding:10px 4px 12px; cursor:pointer; color:var(--grijs);
+    display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10.5px; font-weight:600; position:relative; }
+  .tab.aan{ color:var(--navy); }
+  .tab.aan::before{ content:""; position:absolute; top:0; left:50%; transform:translateX(-50%); width:34px; height:3px; background:var(--goud); border-radius:0 0 3px 3px; }
+  .tab .ic{ width:22px; height:22px; }
+  /* Login */
+  #login{ position:fixed; inset:0; z-index:100; background:var(--papier-diep); display:flex; align-items:center; justify-content:center; padding:22px; }
+  #login .box{ background:var(--papier); border:1px solid var(--rand); border-radius:16px; padding:26px 22px;
+    width:100%; max-width:380px; box-shadow:0 12px 40px rgba(27,44,79,.18); }
+  #login .merk{ text-align:center; color:var(--navy); font-size:20px; font-weight:700; }
+  #login .merk small{ display:block; font-family:-apple-system,system-ui,sans-serif; font-weight:400; font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--goud); margin-top:2px; }
+  .fout{ color:var(--rood); font-size:12.5px; text-align:center; margin-top:12px; display:none; }
+  .schakel{ text-align:center; font-size:12.5px; color:var(--grijs); margin-top:14px; }
+  .schakel a{ color:var(--navy); font-weight:600; cursor:pointer; text-decoration:underline; }
+  /* Overlay-dialoog */
+  .ovl{ position:fixed; inset:0; z-index:200; background:rgba(27,44,79,.5); display:flex; align-items:center; justify-content:center; padding:18px; }
+  .ovl .d{ background:var(--papier); border-radius:16px; width:100%; max-width:420px; overflow:hidden; box-shadow:0 12px 40px rgba(27,44,79,.3); }
+  .ovl .d-kop{ background:var(--navy); color:#fff; padding:13px 18px; font-weight:700; font-size:14px; border-bottom:2px solid var(--goud); }
+  .ovl .d-body{ padding:18px; font-size:14px; color:var(--inkt); line-height:1.55; white-space:pre-wrap; }
+  .ovl .d-voet{ padding:12px 18px 18px; display:flex; flex-direction:column; gap:9px; }
+  .spinner{ width:16px; height:16px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:draai .7s linear infinite; }
+  @keyframes draai{ to{ transform:rotate(360deg); } }
+  .verwerk{ position:fixed; left:0; right:0; bottom:64px; z-index:40; display:flex; justify-content:center; pointer-events:none; }
+  .verwerk span{ background:var(--navy); color:#fff; font-size:12.5px; padding:9px 16px; border-radius:999px; box-shadow:0 4px 16px rgba(27,44,79,.3); display:inline-flex; align-items:center; gap:9px; }
+  @media(min-width:620px){ main{ padding-bottom:96px; } }
+</style>
+</head>
+<body>
+
+<!-- ── Login ─────────────────────────────────────────────── -->
+<div id="login">
+  <div class="box">
+    <div class="merk">Smart Invoice<small>Fluid Waves</small></div>
+    <div style="text-align:center; font-size:12.5px; color:var(--grijs); margin:8px 0 18px; line-height:1.5;">
+      Factureren en bonnen scannen vanaf je telefoon.
+    </div>
+    <div id="naam-rij" style="display:none;">
+      <label class="veld">Naam van je onderneming</label>
+      <input id="l-naam" class="in" type="text" placeholder="bijv. Jouw Bedrijf" autocomplete="organization">
+    </div>
+    <label class="veld">E-mailadres</label>
+    <input id="l-email" class="in" type="email" autocomplete="email" inputmode="email">
+    <label class="veld">Wachtwoord</label>
+    <input id="l-pass" class="in" type="password" autocomplete="current-password">
+    <div id="pass-hint" style="display:none; font-size:11px; color:var(--grijs); margin-top:4px;">Minimaal 8 tekens.</div>
+    <button id="l-btn" class="knop primair groot" style="margin-top:16px;">Inloggen</button>
+    <div id="l-fout" class="fout"></div>
+    <div class="schakel"><span id="l-schakel-t">Nog geen account?</span> <a id="l-schakel">Account aanmaken</a></div>
+  </div>
+</div>
+
+<!-- ── App ───────────────────────────────────────────────── -->
+<div class="app" id="app" style="display:none;">
+  <header class="kop">
+    <svg viewBox="0 0 48 32" width="34" height="23" aria-hidden="true">
+      <path d="M2 20 C 10 8, 16 8, 24 16 S 38 24, 46 12" fill="none" stroke="#9BB0C9" stroke-width="3.4" stroke-linecap="round"/>
+      <path d="M2 26 C 10 14, 16 14, 24 22 S 38 30, 46 18" fill="none" stroke="#C9A227" stroke-width="3.4" stroke-linecap="round"/>
+    </svg>
+    <div class="merk">Smart Invoice<small>Fluid Waves</small></div>
+    <div class="kop-recht">
+      <span id="modus-badge" class="badge">—</span>
+    </div>
+  </header>
+
+  <main id="scherm"><!-- inhoud per tab --></main>
+
+  <div class="verwerk" id="verwerk" style="display:none;"><span><span class="spinner"></span><span id="verwerk-tekst">Bezig…</span></span></div>
+
+  <nav class="tabbar"><div class="app-b">
+    <button class="tab" data-tab="scan">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Scannen
+    </button>
+    <button class="tab" data-tab="map">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Mijn map
+    </button>
+    <button class="tab" data-tab="factuur">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>
+      Factuur
+    </button>
+    <button class="tab" data-tab="account">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>
+      Account
+    </button>
+  </div></nav>
+</div>
+
+<script>
+"use strict";
+(function(){
+  // ── Config (vast ingevuld, geen placeholders) ───────────────────────────
+  var SUPABASE_URL  = "https://vsvqybcfhvlrbnhmuerh.supabase.co";
+  var SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzdnF5YmNmaHZscmJuaG11ZXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMzIxOTQsImV4cCI6MjA5ODgwODE5NH0.7I7hktMKe6rF3ZDgM7LMKyO_Pkww6fcBULdO-8BsudY";
+  var APP_INVOICE  = "smart-invoice";
+  var APP_ADMIN    = "smart-admin";
+  var TIER_INVOICE = "smart-invoice-vast";
+  var PRIJS_TEKST  = "Smart Invoice kost €9,95 per maand (ex btw).\nFactureren + bonnen scannen vanaf je telefoon.\nMaandelijks opzegbaar.";
+  var BUCKET = "adm-bestanden";
+
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: { persistSession:true, autoRefreshToken:true, storageKey:"fw-invoice-auth" }
+  });
+
+  // Token zelf vasthouden (localStorage is niet altijd betrouwbaar) en aan elke
+  // db-client meegeven, zodat auth.uid() gevuld is voor RLS.
+  var ACCESS_TOKEN = null, _dbc = null, _dbcTok = null;
+  function dbClient(){
+    if(!ACCESS_TOKEN) return sb;
+    if(_dbc && _dbcTok === ACCESS_TOKEN) return _dbc;
+    _dbc = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth:{ persistSession:false, autoRefreshToken:false },
+      global:{ headers:{ Authorization:"Bearer "+ACCESS_TOKEN } }
+    });
+    _dbcTok = ACCESS_TOKEN; return _dbc;
+  }
+
+  // ── State ────────────────────────────────────────────────────────────────
+  var user = null;
+  var MODUS = "proef";      // 'companion' | 'standalone' | 'proef'
+  var TOEGANG = null;       // resultaat van mijn_toegang
+  var administraties = {};  // alleen in companion-modus
+  var curAdmin = null;      // gekozen administratie (companion)
+  var curTab = "scan";
+  var scanSoort = "kosten"; // 'omzet' | 'kosten'
+  var concept = null;       // factuur-concept
+
+  // ── Elementen ────────────────────────────────────────────────────────────
+  var el = function(id){ return document.getElementById(id); };
+  var loginEl = el("login"), appEl = el("app"), scherm = el("scherm");
+
+  // ── Dialogen (huisstijl) ─────────────────────────────────────────────────
+  function ontsnap(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function dialoog(opts){
+    return new Promise(function(res){
+      var o = document.createElement("div"); o.className = "ovl";
+      var knoppen = (opts.knoppen||[{label:"OK", waarde:true}]).map(function(k,i){
+        return '<button data-i="'+i+'" class="knop '+(k.klasse||(i===0?"primair":"stil"))+' groot">'+ontsnap(k.label)+'</button>';
+      }).join("");
+      o.innerHTML = '<div class="d"><div class="d-kop">'+ontsnap(opts.titel||"Smart Invoice")+'</div>'+
+        '<div class="d-body">'+ontsnap(opts.tekst||"")+'</div><div class="d-voet">'+knoppen+'</div></div>';
+      document.body.appendChild(o);
+      Array.prototype.forEach.call(o.querySelectorAll("[data-i]"), function(b){
+        b.onclick = function(){ var i = parseInt(b.getAttribute("data-i"),10); document.body.removeChild(o); res((opts.knoppen||[{waarde:true}])[i].waarde); };
+      });
+    });
+  }
+  function melding(t, titel){ return dialoog({ titel:titel, tekst:t, knoppen:[{label:"OK", waarde:true}] }); }
+  function bevestig(t, titel){ return dialoog({ titel:titel||"Bevestigen", tekst:t, knoppen:[{label:"Ja", waarde:true, klasse:"primair"},{label:"Annuleren", waarde:false, klasse:"stil"}] }); }
+
+  function verwerkAan(t){ el("verwerk-tekst").textContent = t||"Bezig…"; el("verwerk").style.display = "flex"; }
+  function verwerkUit(){ el("verwerk").style.display = "none"; }
+
+  // ── Login / registratie ──────────────────────────────────────────────────
+  var modus = "inloggen";
+  function toonFout(t){ var f = el("l-fout"); f.textContent = t; f.style.display = "block"; }
+  function zetLoginModus(m){
+    modus = m;
+    el("l-fout").style.display = "none";
+    var aanmelden = (m === "aanmelden");
+    el("naam-rij").style.display = aanmelden ? "" : "none";
+    el("pass-hint").style.display = aanmelden ? "" : "none";
+    el("l-btn").textContent = aanmelden ? "Account aanmaken" : "Inloggen";
+    el("l-schakel-t").textContent = aanmelden ? "Heb je al een account?" : "Nog geen account?";
+    el("l-schakel").textContent = aanmelden ? "Inloggen" : "Account aanmaken";
+    el("l-pass").setAttribute("autocomplete", aanmelden ? "new-password" : "current-password");
+  }
+  el("l-schakel").onclick = function(){ zetLoginModus(modus==="inloggen"?"aanmelden":"inloggen"); };
+
+  async function login(){
+    var email = el("l-email").value.trim(), pass = el("l-pass").value;
+    if(!email || !pass){ toonFout("Vul e-mail en wachtwoord in."); return; }
+    var btn = el("l-btn"); btn.textContent = "Bezig…"; btn.disabled = true;
+    var r = await sb.auth.signInWithPassword({ email:email, password:pass });
+    btn.disabled = false; zetLoginModus(modus);
+    if(r.error){ toonFout("Inloggen mislukt: "+r.error.message); return; }
+    user = r.data.user;
+    ACCESS_TOKEN = r.data.session ? r.data.session.access_token : null;
+    if(!user || !ACCESS_TOKEN){ toonFout("Sessie niet geladen — probeer opnieuw."); return; }
+    await naBinnenkomst();
+  }
+  async function registreer(){
+    var naam = el("l-naam").value.trim(), email = el("l-email").value.trim(), pass = el("l-pass").value;
+    if(!naam){ toonFout("Vul de naam van je onderneming in."); return; }
+    if(!email){ toonFout("Vul je e-mailadres in."); return; }
+    if(pass.length < 8){ toonFout("Kies een wachtwoord van minimaal 8 tekens."); return; }
+    var btn = el("l-btn"); btn.textContent = "Bezig…"; btn.disabled = true;
+    var r = await sb.auth.signUp({ email:email, password:pass });
+    if(r.error){
+      btn.disabled = false; zetLoginModus(modus);
+      toonFout(/registered|exists|already/i.test(r.error.message||"") ? "Er bestaat al een account met dit e-mailadres. Log in." : "Aanmelden mislukt: "+r.error.message);
+      return;
+    }
+    var sessie = r.data ? r.data.session : null, gebruiker = r.data ? r.data.user : null;
+    if(!sessie){
+      var ri = await sb.auth.signInWithPassword({ email:email, password:pass });
+      if(ri.error){ btn.disabled = false; zetLoginModus(modus); toonFout("Account gemaakt, maar inloggen lukte niet: "+ri.error.message); return; }
+      sessie = ri.data.session; gebruiker = ri.data.user;
+    }
+    user = gebruiker; ACCESS_TOKEN = sessie ? sessie.access_token : null;
+    btn.disabled = false;
+    if(!user || !ACCESS_TOKEN){ zetLoginModus(modus); toonFout("Sessie niet geladen — probeer opnieuw."); return; }
+    // Bedrijfsnaam vast bewaren voor de standalone-modus.
+    try { await dbClient().schema(APP_INVOICE).from("bedrijf").upsert({ user_id:user.id, naam:naam }, { onConflict:"user_id" }); } catch(e){}
+    await naBinnenkomst();
+  }
+  function verwerkKnop(){ if(modus==="aanmelden") registreer(); else login(); }
+  el("l-btn").onclick = verwerkKnop;
+  el("l-pass").addEventListener("keydown", function(e){ if(e.key==="Enter") verwerkKnop(); });
+  el("l-email").addEventListener("keydown", function(e){ if(e.key==="Enter") verwerkKnop(); });
+
+  async function uitloggen(){
+    if(!(await bevestig("Wil je uitloggen?", "Uitloggen"))) return;
+    try { await sb.auth.signOut(); } catch(e){}
+    user = null; ACCESS_TOKEN = null; administraties = {}; curAdmin = null; MODUS = "proef"; TOEGANG = null;
+    appEl.style.display = "none"; loginEl.style.display = "flex";
+    zetLoginModus("inloggen"); el("l-pass").value = "";
+  }
+
+  // ── Toegang / modus bepalen ───────────────────────────────────────────────
+  async function toegangVan(appId){
+    try { var r = await dbClient().rpc("mijn_toegang", { p_app_id: appId }); return (!r.error && r.data) ? r.data : null; }
+    catch(e){ return null; }
+  }
+  async function bepaalModus(){
+    var adm = await toegangVan(APP_ADMIN);
+    if(adm && adm.toegang === true){ MODUS = "companion"; TOEGANG = adm; return; }
+    var inv = await toegangVan(APP_INVOICE);
+    if(inv && inv.toegang === true){ MODUS = "standalone"; TOEGANG = inv; return; }
+    MODUS = "proef"; TOEGANG = (inv || adm || null);
+  }
+  function magBewarenNu(){ return MODUS === "companion" || MODUS === "standalone"; }
+  async function eisAbonnement(inleiding){
+    if(magBewarenNu()) return true;
+    if(MODUS === "companion") return true;
+    var keuze = await dialoog({
+      titel:"Abonneer op Smart Invoice",
+      tekst:(inleiding?inleiding+"\n\n":"")+PRIJS_TEKST,
+      knoppen:[{label:"Abonneer — €9,95/mnd (ex btw)", waarde:"abo", klasse:"goud"},{label:"Nu niet", waarde:null, klasse:"stil"}]
+    });
+    if(keuze === "abo") await startAbonnement();
+    return false;
+  }
+  async function startAbonnement(){
+    if(!user || !user.id){ await melding("Log eerst in om te abonneren."); return; }
+    try {
+      var res = await fetch("/api/start-checkout", {
+        method:"POST", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ tier_id:TIER_INVOICE, gebruiker:user.id, email:user.email||null, terug_url: location.origin + location.pathname })
+      });
+      var d = await res.json().catch(function(){ return {}; });
+      if(!res.ok || !d.url){ await melding("De betaalpagina kon niet worden geopend: "+(d.error||res.status)+"."); return; }
+      location.href = d.url;
+    } catch(e){ await melding("Verbinding met de betaalservice mislukt: "+(e.message||e)); }
+  }
+
+  // ── Terugkeer van Stripe (?betaald=1/0) ───────────────────────────────────
+  (function(){
+    try {
+      var qs = new URLSearchParams(location.search);
+      if(!qs.has("betaald")) return;
+      var gelukt = qs.get("betaald") === "1";
+      history.replaceState({}, "", location.pathname);
+      setTimeout(function(){
+        melding(gelukt ? "Betaling gelukt — je abonnement is actief! Je kunt nu factureren en scannen bewaren."
+                       : "De betaling is niet afgerond. Er is niets afgeschreven.", gelukt ? "Welkom bij Smart Invoice" : "Betaling geannuleerd");
+      }, 500);
+    } catch(e){}
+  })();
+
+  // ── Administraties (companion) ────────────────────────────────────────────
+  function initialen(naam){ return String(naam||"?").trim().split(/\s+/).map(function(w){ return w[0]; }).join("").slice(0,2).toUpperCase(); }
+  async function laadAdmins(){
+    administraties = {};
+    var r = await dbClient().schema(APP_ADMIN).from("administraties").select("*").order("aangemaakt");
+    if(r.error || !r.data) return;
+    r.data.forEach(function(a){
+      administraties[a.id] = { id:a.id, naam:a.naam, ini:initialen(a.naam), gearchiveerd:!!a.gearchiveerd,
+        adres:a.adres||"", postcode:a.postcode||"", plaats:a.plaats||"", email:a.email||"", telefoon:a.telefoon||"",
+        iban:a.iban||"", kvk:a.kvk||"", btw_nummer:a.btw_nummer||"", logo_pad:a.logo_pad||null };
+    });
+    var actief = Object.keys(administraties).filter(function(id){ return !administraties[id].gearchiveerd; });
+    if(actief.length){ if(!curAdmin || !administraties[curAdmin]) curAdmin = actief[0]; } else { curAdmin = null; }
+  }
+
+  // ── Bedrijfsgegevens (bron voor de factuur) ───────────────────────────────
+  async function laadBedrijf(){
+    if(MODUS === "companion" && curAdmin && administraties[curAdmin]) return administraties[curAdmin];
+    var r = await dbClient().schema(APP_INVOICE).from("bedrijf").select("*").maybeSingle();
+    return (r && r.data) ? r.data : { naam:"", adres:"", postcode:"", plaats:"", email:"", telefoon:"", iban:"", kvk:"", btw_nummer:"", logo_pad:null };
+  }
+  async function bewaarBedrijf(obj){
+    if(MODUS === "companion") return { error:{ message:"Beheer je bedrijfsgegevens in Smart Admin." } };
+    obj.user_id = user.id;
+    return await dbClient().schema(APP_INVOICE).from("bedrijf").upsert(obj, { onConflict:"user_id" });
+  }
+
+  // ── Opslag ────────────────────────────────────────────────────────────────
+  async function uploadBestand(file){
+    var veilig = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    var map = (MODUS === "companion" && curAdmin) ? curAdmin : "invoice";
+    var pad = user.id + "/" + map + "/" + Date.now() + "_" + veilig;
+    var r = await dbClient().storage.from(BUCKET).upload(pad, file);
+    if(r.error){ await melding("Upload mislukt: "+r.error.message); return false; }
+    return pad;
+  }
+  async function openBestand(pad){
+    var r = await dbClient().storage.from(BUCKET).createSignedUrl(pad, 60);
+    if(r.error){ await melding("Openen mislukt: "+r.error.message); return; }
+    window.open(r.data.signedUrl, "_blank");
+  }
+
+  // ── Inbox-laag: kiest tabel op basis van modus ────────────────────────────
+  function inboxTabel(){ return MODUS === "companion" ? dbClient().schema(APP_ADMIN).from("inbox") : dbClient().schema(APP_INVOICE).from("inbox"); }
+  async function inboxLijst(soort){
+    var q = inboxTabel().select("*").eq("soort", soort).eq("status", "nieuw").order("datum", { ascending:false });
+    if(MODUS === "companion") q = q.eq("administratie_id", curAdmin);
+    return await q;
+  }
+  async function inboxTel(){
+    var q = inboxTabel().select("id", { count:"exact", head:true }).eq("status", "nieuw");
+    if(MODUS === "companion") q = q.eq("administratie_id", curAdmin);
+    var r = await q; return (r && typeof r.count === "number") ? r.count : 0;
+  }
+  function inboxRij(basis){
+    basis.user_id = user.id;
+    if(MODUS === "companion") basis.administratie_id = curAdmin;
+    return basis;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  SCHERM: SCANNEN
+  // ══════════════════════════════════════════════════════════════════════════
+  function schermScan(){
+    var isOmzet = (scanSoort === "omzet");
+    var doelTekst = MODUS === "companion"
+      ? "Je scan verschijnt meteen in de verzamelmap van Smart Admin op je desktop."
+      : "Je scan komt in je eigen map — hier op je telefoon én op je pc. Bij een upgrade naar Smart Admin verhuist alles mee.";
+    scherm.innerHTML =
+      '<div class="kaart">'+
+        '<h2>Bon of factuur scannen</h2>'+
+        '<div class="sub" style="margin-bottom:12px;">Maak een foto of kies een bestand. De gegevens (datum, bedrag, btw) worden automatisch gelezen.</div>'+
+        '<div class="toggle" style="margin-bottom:14px;">'+
+          '<button id="s-kosten" class="'+(!isOmzet?"aan":"")+'">Kosten / inkoop</button>'+
+          '<button id="s-omzet" class="'+(isOmzet?"aan":"")+'">Omzet</button>'+
+        '</div>'+
+        '<button id="s-camera" class="knop primair groot" style="margin-bottom:10px;">'+
+          '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>'+
+          'Foto maken'+
+        '</button>'+
+        '<button id="s-kies" class="knop rand groot">Bestand kiezen (pdf, jpg, png)</button>'+
+        '<input id="s-cap" type="file" accept="image/*" capture="environment" style="display:none;">'+
+        '<input id="s-file" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style="display:none;">'+
+      '</div>'+
+      '<div class="info">'+doelTekst+'</div>'+
+      (MODUS === "proef" ? '<div class="info" style="margin-top:10px; background:#fff; border-color:var(--rand);">Je bekijkt de proefmodus. Om scans te bewaren sluit je een abonnement af (€9,95/mnd).</div>' : '');
+
+    el("s-kosten").onclick = function(){ scanSoort = "kosten"; schermScan(); };
+    el("s-omzet").onclick  = function(){ scanSoort = "omzet";  schermScan(); };
+    var cap = el("s-cap"), file = el("s-file");
+    el("s-camera").onclick = function(){ cap.click(); };
+    el("s-kies").onclick   = function(){ file.click(); };
+    cap.onchange  = function(){ verwerkBestanden(cap.files); };
+    file.onchange = function(){ verwerkBestanden(file.files); };
+  }
+
+  async function verwerkBestanden(files){
+    var lijst = Array.prototype.slice.call(files||[]);
+    if(!lijst.length) return;
+    if(!(await eisAbonnement("Om scans te bewaren heb je een abonnement nodig."))) return;
+    for(var i=0;i<lijst.length;i++){
+      var f = lijst[i];
+      verwerkAan("Bestand "+(i+1)+" van "+lijst.length+" — uploaden…");
+      var pad = await uploadBestand(f);
+      if(pad === false) continue;
+      var rij = inboxRij({ soort:scanSoort, bestand_pad:pad, bestand_naam:f.name });
+      try {
+        verwerkAan("Bestand "+(i+1)+" van "+lijst.length+" — wordt gelezen…");
+        var base64 = await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(String(fr.result).split(",")[1]); }; fr.onerror=rej; fr.readAsDataURL(f); });
+        var mt = f.type || (f.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+        var r = await fetch("/api/extract", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ soort:scanSoort, media_type:mt, data:base64 }) });
+        var uit = await r.json();
+        if(uit.ok && uit.velden){
+          var v = uit.velden; rij.herkend = true;
+          if(v.datum) rij.datum = v.datum;
+          if(v.naam) rij.naam = v.naam;
+          if(v.omschrijving) rij.omschrijving = v.omschrijving;
+          if(v.bedrag_excl != null) rij.bedrag_excl = v.bedrag_excl;
+          if(v.btw_bedrag != null) rij.btw_bedrag = v.btw_bedrag;
+          if(v.bedrag_incl != null) rij.bedrag_incl = v.bedrag_incl;
+          if(v.btw_pct != null) rij.btw_pct = v.btw_pct;
+        }
+      } catch(e){ /* herkenning is een extraatje */ }
+      var ins = await inboxTabel().insert(rij);
+      if(ins.error){ await melding("Opslaan in de map mislukte: "+ins.error.message); }
+    }
+    verwerkUit();
+    scanSoort = scanSoort; curTab = "map"; zetTab("map");
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  SCHERM: MIJN MAP
+  // ══════════════════════════════════════════════════════════════════════════
+  var mapSoort = "kosten";
+  async function schermMap(){
+    scherm.innerHTML = '<div class="kaart"><h2>Mijn map</h2><div class="sub">Bezig met laden…</div></div>';
+    var isOmzet = (mapSoort === "omzet");
+    var q = await inboxLijst(mapSoort);
+    var items = (q && q.data) ? q.data : [];
+    var uitleg = MODUS === "companion"
+      ? "Dit zijn je scans in Smart Admin. Verwerk ze op je desktop in de verzamelmappen, of hier."
+      : "Je verzamelmap. Alles staat klaar tot je upgradet naar Smart Admin; dan gaat het 1-op-1 mee.";
+    var html =
+      '<div class="kaart" style="padding-bottom:8px;">'+
+        '<h2>Mijn map</h2>'+
+        '<div class="sub" style="margin-bottom:12px;">'+uitleg+'</div>'+
+        '<div class="toggle">'+
+          '<button id="m-kosten" class="'+(!isOmzet?"aan":"")+'">Kosten</button>'+
+          '<button id="m-omzet" class="'+(isOmzet?"aan":"")+'">Omzet</button>'+
+        '</div>'+
+      '</div>';
+    if(!items.length){
+      html += '<div class="leeg">Nog niets in deze map. Scan een '+(isOmzet?"omzetbewijs":"bon")+' via het tabblad Scannen.</div>';
+    } else {
+      html += '<div class="sub" style="margin:2px 0 10px; font-weight:600; color:var(--navy);">'+items.length+' item'+(items.length!==1?"s":"")+'</div>';
+      html += items.map(function(it){
+        var pctOpties = [21,9,0].map(function(p){ return '<option value="'+p+'"'+((it.btw_pct==null?21:it.btw_pct)===p?" selected":"")+'>'+p+'%</option>'; }).join("");
+        return '<div class="item" data-id="'+it.id+'">'+
+          '<div class="kop-r">'+
+            '<div class="thumb" data-pad="'+ontsnap(it.bestand_pad)+'"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="width:20px;height:20px;"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg></div>'+
+            '<div style="flex:1; min-width:0;">'+
+              '<div class="mini">'+ontsnap(it.bestand_naam||"bestand")+(it.herkend?" · automatisch gelezen":" · vul zelf in")+'</div>'+
+              '<div class="veldrij">'+
+                '<input class="i-datum" type="date" value="'+ontsnap(it.datum||"")+'" style="width:135px;">'+
+                '<input class="i-naam" type="text" placeholder="'+(isOmzet?"Klant":"Leverancier")+'" value="'+ontsnap(it.naam||"")+'" style="flex:1; min-width:110px;">'+
+              '</div>'+
+              '<div class="veldrij" style="margin-top:6px;">'+
+                '<input class="i-excl" type="number" step="0.01" inputmode="decimal" placeholder="€ excl." value="'+(it.bedrag_excl!=null?it.bedrag_excl:"")+'" style="width:100px; text-align:right;">'+
+                '<select class="i-btw">'+pctOpties+'</select>'+
+                '<input class="i-oms" type="text" placeholder="Omschrijving" value="'+ontsnap(it.omschrijving||"")+'" style="flex:1; min-width:120px;">'+
+              '</div>'+
+            '</div>'+
+          '</div>'+
+          '<div class="itemacties">'+
+            '<button class="knop rand i-bewaar">Wijzigingen bewaren</button>'+
+            '<button class="knop stil i-weg" style="flex:0 0 auto; color:var(--rood); border-color:var(--rood);">Verwijderen</button>'+
+          '</div>'+
+        '</div>';
+      }).join("");
+    }
+    scherm.innerHTML = html;
+    el("m-kosten").onclick = function(){ mapSoort = "kosten"; schermMap(); };
+    el("m-omzet").onclick  = function(){ mapSoort = "omzet";  schermMap(); };
+    Array.prototype.forEach.call(scherm.querySelectorAll(".thumb"), function(t){ t.onclick = function(){ openBestand(t.getAttribute("data-pad")); }; });
+    Array.prototype.forEach.call(scherm.querySelectorAll(".item"), function(node){
+      var id = node.getAttribute("data-id");
+      node.querySelector(".i-weg").onclick = async function(){
+        if(!(await bevestig("Dit item en het bestand uit je map verwijderen?", "Verwijderen"))) return;
+        var item = items.filter(function(x){ return x.id===id; })[0];
+        try { if(item) await dbClient().storage.from(BUCKET).remove([item.bestand_pad]); } catch(e){}
+        var r = await inboxTabel().delete().eq("id", id);
+        if(r.error){ await melding("Verwijderen mislukt: "+r.error.message); return; }
+        schermMap();
+      };
+      node.querySelector(".i-bewaar").onclick = async function(){
+        var upd = {
+          datum: node.querySelector(".i-datum").value || null,
+          naam: node.querySelector(".i-naam").value.trim(),
+          omschrijving: node.querySelector(".i-oms").value.trim(),
+          bedrag_excl: parseFloat(node.querySelector(".i-excl").value) || null,
+          btw_pct: parseInt(node.querySelector(".i-btw").value, 10)
+        };
+        if(upd.bedrag_excl != null){ upd.btw_bedrag = Math.round(upd.bedrag_excl*upd.btw_pct)/100; upd.bedrag_incl = Math.round((upd.bedrag_excl+upd.btw_bedrag)*100)/100; }
+        this.textContent = "Bezig…"; this.disabled = true;
+        var r = await inboxTabel().update(upd).eq("id", id);
+        this.textContent = "Wijzigingen bewaren"; this.disabled = false;
+        if(r.error){ await melding("Bewaren mislukt: "+r.error.message); return; }
+        this.textContent = "Bewaard ✓";
+        var b = this; setTimeout(function(){ b.textContent = "Wijzigingen bewaren"; }, 1800);
+      };
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  SCHERM: FACTUUR
+  // ══════════════════════════════════════════════════════════════════════════
+  function nieuwConcept(){ var d = new Date(); var iso = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    return { soort:"factuur", factuurnummer:"", factuurdatum:iso, klant:{ naam:"", adres:"", postcode:"", plaats:"", email:"" }, omschrijving:"", korting_pct:0, regels:[{ omschrijving:"", aantal:1, tarief:0, btw_pct:21 }] }; }
+  function eur(n){ n = Math.round((Number(n)||0)*100)/100; return "€ "+n.toLocaleString("nl-NL",{ minimumFractionDigits:2, maximumFractionDigits:2 }); }
+  function totalen(c){
+    var perT = {}, excl = 0;
+    (c.regels||[]).forEach(function(r){ var rt=(Number(r.aantal)||0)*(Number(r.tarief)||0); excl+=rt; var p=(r.btw_pct==null?21:Number(r.btw_pct)); if(!perT[p])perT[p]={excl:0,btw:0}; perT[p].excl+=rt; });
+    excl = Math.round(excl*100)/100;
+    var kp = Number(c.korting_pct)||0, factor = 1-(kp/100);
+    var kort = Math.round(excl*(kp/100)*100)/100, exclNa = Math.round((excl-kort)*100)/100, btw = 0;
+    Object.keys(perT).forEach(function(p){ var na=Math.round(perT[p].excl*factor*100)/100; perT[p].excl=na; perT[p].btw=Math.round(na*Number(p))/100; btw+=perT[p].btw; });
+    btw = Math.round(btw*100)/100;
+    return { excl:excl, kort:kort, exclNa:exclNa, btw:btw, incl:Math.round((exclNa+btw)*100)/100, perT:perT };
+  }
+
+  async function schermFactuur(){
+    if(!concept) concept = nieuwConcept();
+    var c = concept, t = totalen(c);
+    var regelsHtml = c.regels.map(function(r,i){
+      var pct = [21,9,0].map(function(p){ return '<option value="'+p+'"'+((r.btw_pct==null?21:r.btw_pct)===p?" selected":"")+'>'+p+'%</option>'; }).join("");
+      return '<div class="regel" data-i="'+i+'">'+
+        '<input class="r-oms" data-v="omschrijving" type="text" placeholder="Omschrijving" value="'+ontsnap(r.omschrijving)+'">'+
+        '<input class="r-num" data-v="aantal" type="number" step="0.25" inputmode="decimal" placeholder="aantal" value="'+(r.aantal!=null?r.aantal:"")+'">'+
+        '<input class="r-num" data-v="tarief" type="number" step="0.01" inputmode="decimal" placeholder="€" value="'+(r.tarief!=null?r.tarief:"")+'">'+
+        '<select class="r-btw" data-v="btw_pct">'+pct+'</select>'+
+        '<button class="r-weg" title="Regel weg"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>'+
+      '</div>';
+    }).join("");
+
+    scherm.innerHTML =
+      '<div class="kaart">'+
+        '<h2>Nieuwe factuur</h2>'+
+        '<div class="toggle" style="margin:10px 0 4px;">'+
+          '<button id="f-factuur" class="'+(c.soort!=="offerte"?"aan":"")+'">Factuur</button>'+
+          '<button id="f-offerte" class="'+(c.soort==="offerte"?"aan":"")+'">Offerte</button>'+
+        '</div>'+
+        '<div class="rij" style="margin-top:8px;">'+
+          '<div><label class="veld">'+(c.soort==="offerte"?"Offertenummer":"Factuurnummer")+'</label><input id="f-nr" class="in" type="text" placeholder="bijv. 2026-001" value="'+ontsnap(c.factuurnummer)+'"></div>'+
+          '<div><label class="veld">Datum</label><input id="f-datum" class="in" type="date" value="'+ontsnap(c.factuurdatum)+'"></div>'+
+        '</div>'+
+      '</div>'+
+
+      '<div class="kaart">'+
+        '<h2 style="font-size:13px;">Klant</h2>'+
+        '<label class="veld">Naam</label><input id="k-naam" class="in" type="text" value="'+ontsnap(c.klant.naam)+'">'+
+        '<label class="veld">Adres</label><input id="k-adres" class="in" type="text" value="'+ontsnap(c.klant.adres)+'">'+
+        '<div class="rij"><div><label class="veld">Postcode</label><input id="k-post" class="in" type="text" value="'+ontsnap(c.klant.postcode)+'"></div>'+
+        '<div style="flex:2;"><label class="veld">Plaats</label><input id="k-plaats" class="in" type="text" value="'+ontsnap(c.klant.plaats)+'"></div></div>'+
+        '<label class="veld">E-mail (optioneel)</label><input id="k-email" class="in" type="email" value="'+ontsnap(c.klant.email)+'">'+
+      '</div>'+
+
+      '<div class="kaart">'+
+        '<h2 style="font-size:13px;">Regels</h2>'+
+        '<div style="display:flex; gap:6px; font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--grijs); padding:0 2px 2px;">'+
+          '<span style="flex:1;">Omschrijving</span><span style="width:56px; text-align:right;">Aantal</span><span style="width:56px; text-align:right;">Tarief</span><span style="width:56px; text-align:center;">Btw</span><span style="width:24px;"></span>'+
+        '</div>'+
+        '<div id="f-regels">'+regelsHtml+'</div>'+
+        '<button id="f-regel-add" class="knop stil" style="margin-top:10px; width:100%; border-style:dashed;">+ Regel toevoegen</button>'+
+        '<label class="veld">Omschrijving bovenaan (optioneel)</label>'+
+        '<textarea id="f-oms" class="in" placeholder="Korte toelichting die op de factuur komt">'+ontsnap(c.omschrijving)+'</textarea>'+
+        '<div class="rij" style="margin-top:10px; align-items:flex-end;"><div style="flex:0 0 110px;"><label class="veld">Korting %</label><input id="f-korting" class="in" type="number" step="0.1" min="0" max="100" value="'+(c.korting_pct||"")+'"></div><div></div></div>'+
+      '</div>'+
+
+      '<div class="kaart" style="background:var(--navy); border:none;">'+
+        '<div class="totrij"><span>Subtotaal (excl. btw)</span><span id="t-excl">'+eur(t.excl)+'</span></div>'+
+        '<div class="totrij" id="t-kortrij" style="display:'+(t.kort>0?"flex":"none")+';"><span>Korting</span><span id="t-kort">– '+eur(t.kort)+'</span></div>'+
+        '<div id="t-btw"></div>'+
+        '<div class="totrij eind"><span>Totaal</span><span id="t-incl">'+eur(t.incl)+'</span></div>'+
+      '</div>'+
+
+      (MODUS !== "companion" ?
+        '<label style="display:flex; gap:9px; align-items:flex-start; font-size:13px; color:var(--inkt); margin:2px 2px 14px;"><input id="f-inmap" type="checkbox" checked style="margin-top:2px;"> <span>Zet deze factuur ook in mijn map (Omzet), zodat hij later meegaat naar je boekhouding.</span></label>'
+        : '') +
+
+      '<button id="f-maak" class="knop primair groot">Factuur-pdf maken</button>'+
+      '<button id="f-leeg" class="knop stil groot" style="margin-top:10px;">Leegmaken</button>';
+
+    // Kop-velden
+    function leesKop(){
+      c.factuurnummer = el("f-nr").value.trim();
+      c.factuurdatum = el("f-datum").value || null;
+      c.omschrijving = el("f-oms").value;
+      c.korting_pct = parseFloat(el("f-korting").value) || 0;
+      c.klant = { naam:el("k-naam").value.trim(), adres:el("k-adres").value.trim(), postcode:el("k-post").value.trim(), plaats:el("k-plaats").value.trim(), email:el("k-email").value.trim() };
+    }
+    el("f-factuur").onclick = function(){ leesKop(); c.soort="factuur"; schermFactuur(); };
+    el("f-offerte").onclick = function(){ leesKop(); c.soort="offerte"; schermFactuur(); };
+    ["f-nr","f-datum","f-oms","k-naam","k-adres","k-post","k-plaats","k-email"].forEach(function(id){ el(id).oninput = leesKop; });
+
+    function werkTot(){
+      var tt = totalen(c);
+      el("t-excl").textContent = eur(tt.excl);
+      el("t-kortrij").style.display = tt.kort>0 ? "flex" : "none";
+      el("t-kort").textContent = "– "+eur(tt.kort);
+      el("t-btw").innerHTML = Object.keys(tt.perT).sort(function(a,b){ return b-a; }).map(function(p){ return '<div class="totrij"><span>Btw '+p+'%</span><span>'+eur(tt.perT[p].btw)+'</span></div>'; }).join("");
+      el("t-incl").textContent = eur(tt.incl);
+    }
+    werkTot();
+
+    el("f-korting").oninput = function(){ c.korting_pct = parseFloat(this.value)||0; werkTot(); };
+    Array.prototype.forEach.call(scherm.querySelectorAll("#f-regels .regel"), function(row){
+      var i = parseInt(row.getAttribute("data-i"),10);
+      Array.prototype.forEach.call(row.querySelectorAll("[data-v]"), function(inp){
+        inp.oninput = function(){ var v=inp.getAttribute("data-v"); c.regels[i][v] = (v==="omschrijving") ? inp.value : (parseFloat(inp.value)||0); werkTot(); };
+        inp.onchange = inp.oninput;
+      });
+      row.querySelector(".r-weg").onclick = function(){ if(c.regels.length>1){ c.regels.splice(i,1); } else { c.regels[0]={omschrijving:"",aantal:1,tarief:0,btw_pct:21}; } leesKop(); schermFactuur(); };
+    });
+    el("f-regel-add").onclick = function(){ leesKop(); c.regels.push({ omschrijving:"", aantal:1, tarief:0, btw_pct:21 }); schermFactuur(); };
+    el("f-leeg").onclick = async function(){ if(!(await bevestig("Deze factuur leegmaken?"))) return; concept = nieuwConcept(); schermFactuur(); };
+    el("f-maak").onclick = async function(){ leesKop(); await maakFactuur(); };
+  }
+
+  async function maakFactuur(){
+    var c = concept;
+    var echte = c.regels.filter(function(r){ return (Number(r.aantal)||0)!==0 || (r.omschrijving||"").trim(); });
+    if(!c.klant.naam){ await melding("Vul de naam van de klant in."); return; }
+    if(!echte.length){ await melding("Voeg minstens één regel met inhoud toe."); return; }
+    if(!(await eisAbonnement("Om facturen te maken heb je een abonnement nodig."))) return;
+
+    verwerkAan("Factuur maken…");
+    var b = await laadBedrijf();
+    var logo64 = null;
+    if(b.logo_pad){
+      try { var s = await dbClient().storage.from(BUCKET).createSignedUrl(b.logo_pad, 120);
+        if(s.data && s.data.signedUrl){ var resp = await fetch(s.data.signedUrl); var blob = await resp.blob(); logo64 = await new Promise(function(res){ var r=new FileReader(); r.onloadend=function(){ res(r.result); }; r.readAsDataURL(blob); }); } } catch(e){}
+    }
+    var payload = {
+      bedrijf:{ naam:b.naam, adres:b.adres, postcode:b.postcode, plaats:b.plaats, email:b.email, telefoon:b.telefoon, iban:b.iban, kvk:b.kvk, btw:b.btw_nummer },
+      klant: c.klant,
+      soort: c.soort === "offerte" ? "offerte" : "factuur",
+      factuurnummer: c.factuurnummer || (c.soort==="offerte"?"concept":""),
+      factuurdatum: c.factuurdatum,
+      omschrijving: c.omschrijving,
+      korting_pct: c.korting_pct || 0,
+      regels: echte,
+      bestandsnaam: (c.soort==="offerte"?"offerte":"factuur")+(c.factuurnummer?"-"+c.factuurnummer:""),
+      logo_base64: logo64
+    };
+    var pdfBlob;
+    try {
+      var r = await fetch("/api/factuurpdf", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
+      if(!r.ok){ var e=""; try{ e=(await r.json()).error||""; }catch(x){} throw new Error(e||("serverfout "+r.status)); }
+      pdfBlob = await r.blob();
+    } catch(e){ verwerkUit(); await melding("De factuur kon niet worden gemaakt: "+(e.message||e)); return; }
+
+    // In eigen map zetten (Omzet), zodat het later meegaat naar de boekhouding.
+    var inMap = (MODUS !== "companion") && el("f-inmap") && el("f-inmap").checked;
+    if(inMap){
+      try {
+        var t = totalen(c);
+        var naamPdf = (payload.bestandsnaam||"factuur").replace(/[^a-zA-Z0-9 ()_-]/g,"")+".pdf";
+        var pdfFile = new File([pdfBlob], naamPdf, { type:"application/pdf" });
+        var pad = await uploadBestand(pdfFile);
+        if(pad !== false){
+          var hoogste = 0; Object.keys(t.perT).forEach(function(p){ if(Number(p)>hoogste) hoogste=Number(p); });
+          await inboxTabel().insert(inboxRij({ soort:"omzet", bestand_pad:pad, bestand_naam:naamPdf,
+            datum:c.factuurdatum, naam:c.klant.naam, omschrijving:c.omschrijving || ((c.soort==="offerte"?"Offerte ":"Factuur ")+(c.factuurnummer||"")),
+            bedrag_excl:t.exclNa, btw_bedrag:t.btw, bedrag_incl:t.incl, btw_pct:hoogste, herkend:true }));
+        }
+      } catch(e){ /* de pdf is er al; map is een extraatje */ }
+    }
+    verwerkUit();
+    toonPdf(pdfBlob, payload.bestandsnaam || "factuur");
+  }
+
+  function toonPdf(blob, naam){
+    var url = URL.createObjectURL(blob);
+    var kanDelen = !!(navigator.share && navigator.canShare);
+    var o = document.createElement("div"); o.className = "ovl";
+    o.innerHTML = '<div class="d" style="max-width:520px; height:90vh; display:flex; flex-direction:column;">'+
+      '<div class="d-kop" style="display:flex; justify-content:space-between; align-items:center;"><span>Je factuur</span><button id="pv-x" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;">&times;</button></div>'+
+      '<div style="flex:1; background:#525659; overflow:hidden;"><iframe src="'+url+'" style="width:100%;height:100%;border:none;"></iframe></div>'+
+      '<div class="d-voet">'+
+        '<button id="pv-download" class="knop primair groot">Downloaden</button>'+
+        (kanDelen ? '<button id="pv-share" class="knop rand groot">Delen (mail / WhatsApp)</button>' : '')+
+      '</div></div>';
+    document.body.appendChild(o);
+    el("pv-x").onclick = function(){ URL.revokeObjectURL(url); document.body.removeChild(o); };
+    el("pv-download").onclick = function(){ var a=document.createElement("a"); a.href=url; a.download=naam+".pdf"; a.click(); };
+    var sh = el("pv-share");
+    if(sh) sh.onclick = async function(){ try{ var f=new File([blob], naam+".pdf", {type:"application/pdf"}); if(navigator.canShare && navigator.canShare({files:[f]})){ await navigator.share({ files:[f], title:naam }); } else { await melding("Delen wordt op dit apparaat niet ondersteund. Download de pdf en voeg hem toe in je mail."); } }catch(e){} };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  SCHERM: ACCOUNT
+  // ══════════════════════════════════════════════════════════════════════════
+  async function schermAccount(){
+    var b = await laadBedrijf();
+    var statusHtml, aboKnop = "";
+    if(MODUS === "companion"){
+      statusHtml = '<div class="info">Inbegrepen bij je <b>Smart Admin</b>-abonnement. Je scant hier op je telefoon; alles verschijnt in je verzamelmappen in Smart Admin.</div>';
+    } else if(MODUS === "standalone"){
+      var tot = (TOEGANG && TOEGANG.periode_eind) ? new Date(TOEGANG.periode_eind).toLocaleDateString("nl-NL",{ day:"2-digit", month:"long", year:"numeric" }) : "—";
+      statusHtml = '<div class="info">Abonnement <b>actief</b> — €9,95/mnd (ex btw). Huidige periode loopt tot '+tot+'.'+(TOEGANG&&TOEGANG.opgezegd?' Opgezegd; stopt aan het einde van de periode.':'')+'</div>';
+      if(!(TOEGANG && TOEGANG.opgezegd)) aboKnop = '<button id="a-opzeg" class="knop stil groot" style="margin-top:10px; color:var(--rood); border-color:var(--rood);">Abonnement opzeggen</button>';
+    } else {
+      statusHtml = '<div class="info" style="background:#fff; border-color:var(--rand);">Je bekijkt de <b>proefmodus</b>. Sluit een abonnement af om scans en facturen te bewaren.</div>'+
+        '<button id="a-abo" class="knop goud groot" style="margin-top:10px;">Abonneer — €9,95/mnd (ex btw)</button>';
+    }
+
+    var bedrijfBewerkbaar = (MODUS !== "companion");
+    var v = function(x){ return ontsnap(b[x]||""); };
+    var dis = bedrijfBewerkbaar ? "" : "disabled";
+    scherm.innerHTML =
+      '<div class="kaart"><h2>Account</h2><div class="sub">Ingelogd als '+ontsnap(user&&user.email||"")+'</div></div>'+
+      '<div class="kaart">'+statusHtml+aboKnop+'</div>'+
+      (MODUS === "companion" && Object.keys(administraties).length>1 ? bouwAdminKiezer() : "")+
+      '<div class="kaart">'+
+        '<h2 style="font-size:13px;">Bedrijfsgegevens op de factuur</h2>'+
+        (bedrijfBewerkbaar ? '<div class="sub" style="margin-bottom:6px;">Deze gegevens komen bovenaan je factuur.</div>' : '<div class="info" style="margin-bottom:8px;">Beheer je bedrijfsgegevens in Smart Admin. Hier tonen we wat er nu staat.</div>')+
+        '<label class="veld">Bedrijfsnaam</label><input id="b-naam" class="in" '+dis+' value="'+v("naam")+'">'+
+        '<label class="veld">Adres</label><input id="b-adres" class="in" '+dis+' value="'+v("adres")+'">'+
+        '<div class="rij"><div><label class="veld">Postcode</label><input id="b-post" class="in" '+dis+' value="'+v("postcode")+'"></div><div style="flex:2;"><label class="veld">Plaats</label><input id="b-plaats" class="in" '+dis+' value="'+v("plaats")+'"></div></div>'+
+        '<div class="rij"><div><label class="veld">E-mail</label><input id="b-email" class="in" '+dis+' value="'+v("email")+'"></div><div><label class="veld">Telefoon</label><input id="b-tel" class="in" '+dis+' value="'+v("telefoon")+'"></div></div>'+
+        '<label class="veld">IBAN</label><input id="b-iban" class="in" '+dis+' value="'+v("iban")+'">'+
+        '<div class="rij"><div><label class="veld">KvK</label><input id="b-kvk" class="in" '+dis+' value="'+v("kvk")+'"></div><div><label class="veld">Btw-nummer</label><input id="b-btw" class="in" '+dis+' value="'+v("btw_nummer")+'"></div></div>'+
+        (bedrijfBewerkbaar ? '<button id="b-bewaar" class="knop primair groot" style="margin-top:14px;">Bedrijfsgegevens bewaren</button>' : '')+
+      '</div>'+
+      '<button id="a-uitlog" class="knop stil groot">Uitloggen</button>'+
+      '<div style="text-align:center; font-size:11px; color:var(--grijs); margin-top:14px;">Fluid Waves · Smart Invoice</div>';
+
+    var abo = el("a-abo"); if(abo) abo.onclick = function(){ startAbonnement(); };
+    var opz = el("a-opzeg"); if(opz) opz.onclick = opzeggen;
+    el("a-uitlog").onclick = uitloggen;
+    var bb = el("b-bewaar");
+    if(bb) bb.onclick = async function(){
+      var obj = { naam:el("b-naam").value.trim(), adres:el("b-adres").value.trim(), postcode:el("b-post").value.trim(), plaats:el("b-plaats").value.trim(), email:el("b-email").value.trim(), telefoon:el("b-tel").value.trim(), iban:el("b-iban").value.trim(), kvk:el("b-kvk").value.trim(), btw_nummer:el("b-btw").value.trim() };
+      this.textContent = "Bezig…"; this.disabled = true;
+      var r = await bewaarBedrijf(obj);
+      this.disabled = false; this.textContent = "Bedrijfsgegevens bewaren";
+      if(r && r.error){ await melding("Bewaren mislukt: "+r.error.message); return; }
+      this.textContent = "Bewaard ✓"; var s=this; setTimeout(function(){ s.textContent="Bedrijfsgegevens bewaren"; }, 1800);
+    };
+    if(MODUS === "companion" && Object.keys(administraties).length>1) koppelAdminKiezer();
+  }
+
+  function bouwAdminKiezer(){
+    var opties = Object.keys(administraties).filter(function(id){ return !administraties[id].gearchiveerd; })
+      .map(function(id){ return '<option value="'+id+'"'+(id===curAdmin?" selected":"")+'>'+ontsnap(administraties[id].naam)+'</option>'; }).join("");
+    return '<div class="kaart"><h2 style="font-size:13px;">Administratie</h2><div class="sub" style="margin-bottom:8px;">Scans komen in de verzamelmap van deze administratie.</div><select id="a-admin" class="in">'+opties+'</select></div>';
+  }
+  function koppelAdminKiezer(){ var s = el("a-admin"); if(s) s.onchange = function(){ curAdmin = s.value; }; }
+
+  async function opzeggen(){
+    var tot = (TOEGANG && TOEGANG.periode_eind) ? new Date(TOEGANG.periode_eind).toLocaleDateString("nl-NL",{ day:"2-digit", month:"long", year:"numeric" }) : "het einde van de periode";
+    if(!(await bevestig("Je abonnement loopt dan nog tot "+tot+" en stopt daarna. Zeker weten?", "Opzeggen"))) return;
+    try {
+      var res = await fetch("/api/zeg-op", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ accessToken: ACCESS_TOKEN }) });
+      var uit = await res.json().catch(function(){ return {}; });
+      if(!res.ok || uit.ok !== true){ await melding("Opzeggen is niet gelukt: "+(uit.error||res.status)+"."); return; }
+      await melding("Je abonnement is opgezegd en loopt nog tot "+tot+".", "Opgezegd");
+      await bepaalModus(); schermAccount();
+    } catch(e){ await melding("Opzeggen is niet gelukt: "+(e.message||e)); }
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  function zetTab(naam){
+    curTab = naam;
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(b){ b.classList.toggle("aan", b.getAttribute("data-tab")===naam); });
+    if(naam==="scan") schermScan();
+    else if(naam==="map") schermMap();
+    else if(naam==="factuur") schermFactuur();
+    else if(naam==="account") schermAccount();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(b){ b.onclick = function(){ zetTab(b.getAttribute("data-tab")); }; });
+
+  // ── Binnenkomst ────────────────────────────────────────────────────────────
+  function zetBadge(){
+    var el2 = el("modus-badge");
+    if(MODUS === "companion"){ el2.textContent = "via Smart Admin"; el2.className = "badge"; }
+    else if(MODUS === "standalone"){ el2.textContent = "Actief"; el2.className = "badge"; }
+    else { el2.textContent = "Proef"; el2.className = "badge proef"; }
+  }
+  async function naBinnenkomst(){
+    loginEl.style.display = "none"; appEl.style.display = "flex";
+    verwerkAan("Even laden…");
+    await bepaalModus();
+    if(MODUS === "companion") await laadAdmins();
+    verwerkUit();
+    zetBadge();
+    zetTab("scan");
+  }
+
+  // ── Bootstrap: bestaande sessie herstellen ─────────────────────────────────
+  (async function(){
+    zetLoginModus("inloggen");
+    try {
+      var s = await sb.auth.getSession();
+      if(s && s.data && s.data.session){
+        user = s.data.session.user; ACCESS_TOKEN = s.data.session.access_token;
+        if(user && ACCESS_TOKEN){ await naBinnenkomst(); return; }
+      }
+    } catch(e){}
+    loginEl.style.display = "flex";
+  })();
+
+  // ── Service worker ─────────────────────────────────────────────────────────
+  if("serviceWorker" in navigator){ window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); }); }
+})();
+</script>
+</body>
+</html>
