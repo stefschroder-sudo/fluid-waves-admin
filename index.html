@@ -2349,6 +2349,9 @@
           { nr:"7", titel:"Balans", uitleg:"Voorbereiding met een signaal of hij sluit — samen met je accountant af te ronden." },
           { nr:"8", titel:"IB-aangifte", uitleg:"Klaar om te delen met je belastingadviseur voor de aangifte." }
         ])+
+        '<div style="background:#FBF6E6; border:1px solid var(--goud); border-radius:10px; padding:13px 16px; margin-bottom:14px; font-size:11.5px; color:var(--navy); line-height:1.5;">'+
+          '<b>Onderweg? Gebruik Smart Invoice.</b> Met de gratis mobiele app Smart Invoice scan je bonnen en maak je facturen vanaf je telefoon; je scans komen rechtstreeks binnen in je verzamelmappen hier. Je bedrijfsgegevens voor op de factuur beheer je op één plek: hier in Smart Admin, bij <b>2. Offertes en Facturen → Mijn bedrijfsgegevens</b>. Smart Invoice gebruikt automatisch dezelfde gegevens.'+
+        '</div>'+
         '<div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">'+
           '<button id="fw-start-handleiding" style="background:transparent; color:var(--navy); border:1px solid var(--navy); border-radius:9px; font-size:13px; font-weight:700; padding:11px 22px; cursor:pointer;">Handleiding</button>'+
           '<button id="fw-start-verder" style="background:var(--navy); color:var(--papier); border:none; border-radius:9px; font-size:13px; font-weight:700; padding:11px 26px; cursor:pointer;">Aan de slag</button>'+
@@ -2391,7 +2394,7 @@
       sectie("Snelstart — binnen 15 minuten aan de slag",
         stap(1,"Account en inloggen","Maak een account aan met je e-mailadres en wachtwoord (minimaal 8 tekens) en log in. Je kunt direct aan de slag in de proefmodus; alleen voor het bewaren van je gegevens is een abonnement nodig (stap 7).")+
         stap(2,"Je eerste administratie","Geef je administratie de naam van je bedrijf. Meerdere bedrijven? Via de administratie-kiezer linksboven wissel je en maak je extra administraties aan.")+
-        stap(3,"Bedrijfsgegevens","Ga naar 2. Offertes en Facturen → Mijn bedrijfsgegevens. Vul je bedrijfsnaam in en upload je logo; dit komt automatisch op je offertes en facturen.")+
+        stap(3,"Bedrijfsgegevens","Ga naar 2. Offertes en Facturen → Mijn bedrijfsgegevens. Vul je bedrijfsnaam in en upload je logo; dit komt automatisch op je offertes en facturen — én op de facturen in de mobiele app Smart Invoice.")+
         stap(4,"Kies je periode","Bovenin kies je Maand, Kwartaal of Jaar plus het boekjaar. Alles beweegt mee. Doe je btw-aangifte per kwartaal? Zet hem dan op Kwartaal. De cijferstrook toont doorlopend omzet, kosten, btw en openstaande offertes.")+
         stap(5,"Je eerste offerte of factuur","Maak eerst een klant aan (2. Offertes en Facturen → Klanten). Kies dan Nieuwe offerte: regels, uurtarief, btw per regel. Bekijk het voorbeeld, verstuur als PDF, en zet hem na akkoord om naar een factuur — die wordt automatisch als omzet geboekt.")+
         stap(6,"Verzamel je bonnen: scannen of handmatig","Bovenin de zijbalk van 3. Inkomsten en uitgaven staan de verzamelmappen (Map Omzet en Map Kosten). Upload, sleep (ook uit je e-mail) of scan met de camera — op je telefoon opent direct de camera-app. De AI leest datum, bedrag en btw; jij kiest per item: opnemen in de boekhouding of verwijderen. Handmatig invoeren kan in het blok eronder. Houd op het Dashboard ook je actuele banksaldo bij.")+
@@ -2403,6 +2406,8 @@
       sectie("Inkomsten en uitgaven (menu 3)",
         "<b>Verzamelmappen · via scan:</b> verzamel al je bewijsstukken in Map Omzet en Map Kosten vóórdat je iets boekt. Uploaden, slepen (ook rechtstreeks een bijlage uit je e-mail) of scannen met de camera — op je telefoon opent direct de camera-app, op de PC een webcamvenster. De AI leest datum, bedrag, btw en leverancier en zet alles op datum; per item kies je: opnemen in de boekhouding (mét de bon als bijlage) of verwijderen. Verzamelen doe je door de week, boeken wanneer het jou uitkomt.<br><br>"+
         "<b>Handmatig:</b> direct invoeren per soort — Omzet (buiten je facturen om), Inkoopfacturen en Kosten, Bedrijfsmiddelen, Leningen &amp; investeringen en Loonstroken. Voer bedragen in- of exclusief btw in; de rest wordt uitgerekend. Bedrijfsmiddelen en leningen lopen automatisch mee in je resultaat en balans (afschrijvingen). Ook hier met AI-bonherkenning.")+
+      sectie("Smart Invoice — factureren en scannen vanaf je telefoon",
+        "Smart Invoice is de gratis mobiele metgezel van Smart Admin: op je telefoon scan je onderweg bonnen en maak je snel een factuur. Je scans komen rechtstreeks binnen in de verzamelmappen hierboven (menu 3), klaar om te boeken. Belangrijk: je <b>bedrijfsgegevens</b> voor op de factuur beheer je op één plek — hier in Smart Admin, bij 2. Offertes en Facturen → Mijn bedrijfsgegevens. Smart Invoice gebruikt automatisch dezelfde gegevens, dus je hoeft ze maar één keer in te vullen. Open Smart Invoice op fluid-waves-admin.vercel.app/invoice/ en log in met hetzelfde account.")+
       sectie("BTW-aangifte (menu 4)",
         "Aan het einde van je periode staat de aangifte klaar, per rubriek opgebouwd uit je eigen boekingen. Markeer per periode wanneer de aangifte is gedaan en betaald. Corrigeren doe je met Suppletie; via Herkomst per bestand zie je waar elk bedrag vandaan komt. De bedragen neem je over in het portaal van de Belastingdienst.")+
       sectie("Cijfers en jaarwerk (menu 5 t/m 8)",

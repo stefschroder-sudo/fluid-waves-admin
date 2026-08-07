@@ -44,7 +44,8 @@ zaken gescheiden houden? Linksboven in de zijbalk zit de
 ### Stap 3 — Vul je bedrijfsgegevens in
 Ga naar **2. Offertes en Facturen** en kies in de zijbalk **Mijn
 bedrijfsgegevens**. Vul je bedrijfsnaam in en upload eventueel je logo. Deze
-gegevens komen automatisch op je offertes en facturen te staan.
+gegevens komen automatisch op je offertes en facturen te staan — én op de
+facturen die je in de mobiele app **Smart Invoice** maakt.
 
 [SCREENSHOT: Mijn bedrijfsgegevens met logo-upload]
 
@@ -185,7 +186,8 @@ Verwijderen van een factuur vraagt om het overtypen van het factuurnummer en
 ruimt ook de bijbehorende omzetboeking op.
 
 **Mijn bedrijfsgegevens.** Bedrijfsnaam, gegevens en logo voor op je offertes
-en facturen.
+en facturen. Deze gegevens gebruikt ook **Smart Invoice** (de mobiele app)
+automatisch voor de factuurkop — je beheert ze dus op één plek.
 
 [SCREENSHOT: Mijn facturen met statussen]
 
@@ -226,6 +228,20 @@ rekening(en) per vandaag. De rekenmachine eronder telt meerdere rekeningen op.
 Dit saldo komt terug op de balans onder "Bank en kas". Aan een automatische
 bankkoppeling wordt gewerkt; daarvan word je automatisch op de hoogte
 gehouden.
+
+### 2.4 Smart Invoice — mobiel factureren en scannen
+**Smart Invoice** is de gratis mobiele metgezel van Smart Admin, te vinden op
+**fluid-waves-admin.vercel.app/invoice/**. Je logt in met hetzelfde account.
+Onderweg scan je met je telefoon een bon of maak je snel een factuur; je scans
+komen rechtstreeks binnen in de **verzamelmappen** (menu 3), klaar om te boeken.
+
+Je hoeft niets dubbel in te richten: je **bedrijfsgegevens** voor op de factuur
+beheer je op één plek — hier in Smart Admin, bij **2. Offertes en Facturen →
+Mijn bedrijfsgegevens**. Smart Invoice gebruikt automatisch dezelfde gegevens.
+
+*Nog geen Smart Admin?* Dan kan Smart Invoice ook los draaien (met een eigen
+instap-abonnement): je scans en facturen komen dan in een eigen map, die bij een
+latere upgrade naar Smart Admin 1-op-1 meegaat.
 
 ## Hoofdstuk 3 · Periodiek: belasting en cijfers
 
